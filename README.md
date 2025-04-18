@@ -41,8 +41,9 @@ pip install git+https://github.com/SeonghwanSeo/drug-likeness.git
 from druglikeness import DrugLikeness
 
 pretrained_model_name_or_path = 'base' # base | worlddrug | own weight path
-model = DrugLikeness.from_pretrained(pretrained_model_name_or_path, "cpu")
-score = model.evaluate(smiles='c1ccccc1', naive=False)
+model = DrugLikeness.from_pretrained(pretrained_model_name_or_path, device="cpu")
+score = model.scoring(smiles='c1ccccc1', naive=False)
+score_list = model.screening(smiles_list=['c1ccccc1', 'CCN'], naive=True, batch_size=64)
 ```
 
 ## Citation

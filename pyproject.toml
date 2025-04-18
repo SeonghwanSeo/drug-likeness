@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "druglikeness"
+authors = [{ name = "Seonghwan Seo", email = "shwan0106@gmail.com" }]
+version = "0.1.0"
+readme = "README.md"
+classifiers = [
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+]
+keywords = ["rnn", "drug-likeness"]
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "numpy==1.26.4",
+  "torch>=1.13.0",
+  "rdkit",
+  "omegaconf",
+  "gdown",
+]
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+[tool.ruff.lint]
+select = ["E", "F", "B", "UP", "T203", "I"]
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "E402"]

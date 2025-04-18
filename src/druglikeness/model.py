@@ -183,7 +183,8 @@ class DrugLikeness(nn.Module):
         if self.stereo:
             if not naive:
                 isomers = [Chem.MolToSmiles(isomer) for isomer in EnumerateStereoisomers(mol)]
-                return max(self._batch_evaluate(isomers))
+                iters = (isomers[i : i + 16] for i in range(0, len(isomers), 16))
+                return max(max(self._batch_evaluate(chunk)) for chunk in iters)
             else:
                 smi = Chem.MolToSmiles(next(EnumerateStereoisomers(mol)))
                 return self._evaluate(smi)

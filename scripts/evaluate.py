@@ -1,12 +1,17 @@
 from argparse import ArgumentParser
+from pathlib import Path
 
 from druglikeness.deepdl import DeepDL
+
+FDA = "./data/test/fda.smi"
+INVESTIGATION = "./data/test/investigation.smi"
+CHEMBL = "./data/test/chembl.smi"
+ZINC15 = "./data/test/zinc15.smi"
+GDB17 = "./data/test/gdb17.smi"
 
 
 def parse_args():
     parser = ArgumentParser(description="Calculate Drug-likeness With Model")
-    parser.add_argument("test_file", type=str, help="input smiles file (.smi)")
-    parser.add_argument("-o", "--output", type=str, required=True, help="result file (.csv)")
     parser.add_argument("-m", "--model", type=str, default="extended", help="Model name or path")
     parser.add_argument("-a", "--arch", type=str, default="deepdl", help="Architecture of the model.")
     parser.add_argument("--naive", action="store_true", help="If True, model only considers one steroisomer")
@@ -21,14 +26,12 @@ if __name__ == "__main__":
     device = "cuda" if args.cuda else "cpu"
     model = DeepDL.from_pretrained(args.model, device)
 
-    with open(args.test_file) as f:
-        smiles_list = [ln.split()[0] for ln in f.readlines()]
-
-    print(f"Screening {len(smiles_list)} SMILES")
-    score_list = model.screening(smiles_list, args.naive, batch_size=args.batch_size, verbose=True)
-    assert len(smiles_list) == len(score_list), "The number of SMILES and scores do not match."
-
-    with open(args.output, "w") as w:
-        w.write("SMILES,Score\n")
-        for smi, score in zip(smiles_list, score_list):
-            w.write(f"{smi},{score:.3f}\n")
+    for test_file in [FDA, INVESTIGATION, CHEMBL, ZINC15, GDB17]:
+        name = Path(test_file).stem
+        with open(test_file) as f:
+            smiles_list = [ln.split()[0] for ln in f.readlines()]
+        print(f"Test {len(smiles_list)} molecules in {test_file}")
+        score_list = model.screening(smiles_list, args.naive, batch_size=args.batch_size, verbose=True)
+        assert len(smiles_list) == len(score_list), "The number of SMILES and scores do not match."
+        print("Average score", sum(score_list) / len(score_list))
+        print()

@@ -1,7 +1,9 @@
 weights/
-
-# UV
-uv.lock
+result/
+out*.csv
+data/train
+data/test
+scripts_private/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -20,16 +20,14 @@ def parse_args():
     return parser.parse_args()
 
 
-def construct_model(args) -> DrugLikenessClient:
-    device = "cuda" if args.cuda else "cpu"
-
-    if args.arch == "deepdl":
+def construct_model(arch: str, model: str, device: str) -> DrugLikenessClient:
+    if arch == "deepdl":
         from druglikeness.deepdl import DeepDL
 
-        return DeepDL.from_pretrained(args.model, device)
+        return DeepDL.from_pretrained(model, device)
 
     else:
-        raise ValueError(f"Unknown architecture {args.arch}. Supported are 'deepdl' and 'doubledeepdl'.")
+        raise ValueError(f"Unknown architecture {arch}. Supported is 'deepdl'.")
 
 
 def compute_auroc(true_scores: list[float], false_scores: list[float], high_is_better: bool = True) -> float:
@@ -72,7 +70,8 @@ def compute_auroc(true_scores: list[float], false_scores: list[float], high_is_b
 if __name__ == "__main__":
     args = parse_args()
 
-    model = construct_model(args)
+    device = "cuda" if args.cuda else "cpu"
+    model = construct_model(args.arch, args.model, device)
 
     results: dict[str, list[float]] = {}
 

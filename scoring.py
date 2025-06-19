@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 
-from druglikeness.deepdl import DeepDL
+from druglikeness.sdk.api import DrugLikenessClient
 
 
 def parse_args():
@@ -13,8 +13,18 @@ def parse_args():
     return args
 
 
+def construct_model(arch: str, model: str, device: str) -> DrugLikenessClient:
+    if arch == "deepdl":
+        from druglikeness.deepdl import DeepDL
+
+        return DeepDL.from_pretrained(model, device)
+
+    else:
+        raise ValueError(f"Unknown architecture {arch}. Supported is 'deepdl'.")
+
+
 if __name__ == "__main__":
     args = parse_args()
-    model = DeepDL.from_pretrained(args.model, "cpu")
+    model = construct_model(args.arch, args.model, "cpu")
     score = model.scoring(args.smiles, naive=args.naive)
     print(f"score: {score:.3f}")

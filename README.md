@@ -15,7 +15,7 @@ If you have any problems or need help with the code, please add an issue or cont
 score: 88.856
 
 # evaluate a molecule with naive setting using another model
->>> python scoring.py 'CC12C(O)CNC13C1CC(N1)C23' --naive -m chemsci-2022
+>>> python scoring.py 'CC12C(O)CNC13C1CC(N1)C23' --naive -m chemsci-2021
 score: 41.399
 
 # screening

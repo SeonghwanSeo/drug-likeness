@@ -14,7 +14,8 @@ classifiers = [
 ]
 keywords = ["rnn", "drug-likeness"]
 requires-python = ">=3.9"
-dependencies = ["torch>=1.13.0", "numpy", "rdkit", "omegaconf", "gdown", "tqdm"]
+dependencies = ["torch>=1.13.0", "numpy", "rdkit", "gdown", "tqdm"]
+
 
 [project.optional-dependencies]
 train = ["lightning", "wandb"]

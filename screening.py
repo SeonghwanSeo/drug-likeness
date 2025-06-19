@@ -15,11 +15,21 @@ def parse_args():
     return parser.parse_args()
 
 
+def construct_model(arch: str, model: str, device: str) -> DrugLikenessClient:
+    if arch == "deepdl":
+        from druglikeness.deepdl import DeepDL
+
+        return DeepDL.from_pretrained(model, device)
+
+    else:
+        raise ValueError(f"Unknown architecture {arch}. Supported is 'deepdl'.")
+
+
 if __name__ == "__main__":
     args = parse_args()
 
     device = "cuda" if args.cuda else "cpu"
-    model = DeepDL.from_pretrained(args.model, device)
+    model = construct_model(args.arch, args.model, device)
 
     with open(args.test_file) as f:
         smiles_list = [ln.split()[0] for ln in f.readlines()]

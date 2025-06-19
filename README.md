@@ -29,12 +29,12 @@ score: 41.399
 ## Installation
 
 ```bash
-# from official github
+# from official github (python 3.9-3.13)
 git clone https://github.com/SeonghwanSeo/drug-likeness.git
 cd drug-likeness
 pip install -e .
 
-# use pip to install
+# use pip to install in other project
 pip install git+https://github.com/SeonghwanSeo/drug-likeness.git
 ```
 
@@ -67,6 +67,17 @@ score_list = model.screening(smiles_list=['c1ccccc1', 'CCN'], naive=True, batch_
 
 If your environment is offline, you can manually download the models from [Google Drive](https://drive.google.com/drive/folders/1yMxR7HwmwH8wK1mA3wgEasOZ510Ib1-o?usp=share_link).
 
+### Model Performance
+
+Following shows the scoring performance (AUROC) of the models on the various test datasets.
+
+| Model        | Mode   | FDA vs ChEMBL | FDA vs ZINC15 | FDA vs GDB17 |
+| ------------ | ------ | ------------- | ------------- | ------------ |
+| extended     | strict | 0.862         | 0.961         | 0.991        |
+| extended     | naive  | 0.861         | 0.961         | 0.989        |
+| chemsci-2025 | strict | 0.817         | 0.941         | 0.984        |
+| chemsci-2025 | naive  | 0.817         | 0.941         | 0.982        |
+
 ## Train Model
 
 You can finetune the model with your own dataset using the pretrained model on **PubChem** dataset.
@@ -81,30 +92,37 @@ python ./scripts/finetune.py --data_path ./data/train/worlddrug_not_fda.smi
 python ./scripts/finetune.py --data_path <smi_file>
 ```
 
-## Experiments
+## Evaluation
 
 ```bash
 # download train/test datasets
 >>> bash ./scripts/download_data.sh
 
 # evaluate the model
->>> python ./scripts/evaluate.py --naive --cuda
+>>> python ./scripts/evaluate.py  --cuda
 
 # Output
 Test 1489 molecules in data/test/fda.smi
-Average score: 79.42997788326143
+Average score: 79.40051813170444
 
 Test 1792 molecules in data/test/investigation.smi
-Average score: 68.78647222476346
+Average score: 68.71052120625973
 
 Test 10000 molecules in data/test/chembl.smi
-Average score: 64.26294252967834
+Average score: 64.11581128692627
 
 Test 10000 molecules in data/test/zinc15.smi
-Average score: 52.7776697883606
+Average score: 52.7382759815216
 
 Test 10000 molecules in data/test/gdb17.smi
-Average score: 41.600052004623414
+Average score: 39.37572152862549
+
+fda vs chembl
+AUROC 0.8621576897246337
+fda vs zinc15
+AUROC 0.9606756212222335
+fda vs gdb17
+AUROC 0.9906165883142493
 ```
 
 ## Citation

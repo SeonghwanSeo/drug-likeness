@@ -75,8 +75,8 @@ Following shows the scoring performance (AUROC) of the models on the various tes
 | ------------ | ------ | ------------- | ------------- | ------------ |
 | extended     | strict | 0.862         | 0.961         | 0.991        |
 | extended     | naive  | 0.861         | 0.961         | 0.989        |
-| chemSci-2025 | strict | 0.817         | 0.941         | 0.984        |
-| chemSci-2025 | naive  | 0.817         | 0.941         | 0.982        |
+| chemsci-2025 | strict | 0.817         | 0.941         | 0.984        |
+| chemsci-2025 | naive  | 0.817         | 0.941         | 0.982        |
 
 ## Train Model
 

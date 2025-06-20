@@ -62,8 +62,8 @@ score_list = model.screening(smiles_list=['c1ccccc1', 'CCN'], naive=True, batch_
 | :---------------------- | :------------------------------------------------------------------------------------------ |
 | `extended`              | **New model** trained on an updated drug database. (excluding test set: FDA-approved drugs) |
 | `chemsci-2025`          | **Improved model** trained on the same dataset as the paper.                                |
-| `chemsci-2021`          | The **finetuned model** from the paper (PubChem pretrained, World Drug finetuned).          |
-| `chemsci-2021-pretrain` | The **pretrained model** from the paper (trained on PubChem)                                |
+| `chemsci-2021`          | **Finetuned model** from the paper (PubChem pretrained, World Drug finetuned).              |
+| `chemsci-2021-pretrain` | **Pretrained model** from the paper (trained on PubChem)                                    |
 
 If your environment is offline, you can manually download the models from [Google Drive](https://drive.google.com/drive/folders/1yMxR7HwmwH8wK1mA3wgEasOZ510Ib1-o?usp=share_link).
 
@@ -71,12 +71,12 @@ If your environment is offline, you can manually download the models from [Googl
 
 Following shows the scoring performance (AUROC) of the models on the various test datasets.
 
-| Model        | Mode   | FDA vs ChEMBL | FDA vs ZINC15 | FDA vs GDB17 |
-| ------------ | ------ | ------------- | ------------- | ------------ |
-| extended     | strict | 0.862         | 0.961         | 0.991        |
-| extended     | naive  | 0.861         | 0.961         | 0.989        |
-| chemsci-2025 | strict | 0.817         | 0.941         | 0.984        |
-| chemsci-2025 | naive  | 0.817         | 0.941         | 0.982        |
+| Model          | Mode   | FDA vs ChEMBL | FDA vs ZINC15 | FDA vs GDB17 |
+| -------------- | ------ | ------------- | ------------- | ------------ |
+| `extended`     | strict | 0.862         | 0.961         | 0.991        |
+| `extended`     | naive  | 0.861         | 0.961         | 0.989        |
+| `chemsci-2025` | strict | 0.817         | 0.941         | 0.984        |
+| `chemsci-2025` | naive  | 0.817         | 0.941         | 0.982        |
 
 ## Train Model
 

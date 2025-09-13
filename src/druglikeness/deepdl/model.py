@@ -107,10 +107,6 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
         return model
 
     @torch.no_grad()
-    def scoring(self, smiles: str, naive: bool = False) -> float:
-        return self.screening([smiles], naive, verbose=False)[0]
-
-    @torch.no_grad()
     def screening(
         self,
         smiles_list: list[str],

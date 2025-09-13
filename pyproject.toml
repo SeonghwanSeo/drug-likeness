@@ -19,6 +19,7 @@ dependencies = ["torch>=1.13.0", "numpy", "rdkit", "gdown", "tqdm"]
 
 [project.optional-dependencies]
 train = ["lightning", "wandb"]
+eval = ["matplotlib", "seaborn"]
 
 [tool.ruff]
 target-version = "py39"

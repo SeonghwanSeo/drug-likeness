@@ -1,5 +1,7 @@
 # Drug-likeness scoring based on unsupervised learning
 
+<img src="assets/score_distribution.png" width=600>
+
 This repository contains API for [Drug-likeness scoring based on unsupervised learning](https://pubs.rsc.org/en/content/articlehtml/2022/sc/d1sc05248a).
 Original code is available at [SeonghwanSeo/DeepDL](https://github.com/SeonghwanSeo/DeepDL).
 
@@ -10,7 +12,7 @@ If you have any problems or need help with the code, please add an issue or cont
 ### TL;DR
 
 ```bash
-# evaluate a molecule
+# evaluate a molecule with DeepDL
 >>> python scoring.py 'CC(=O)Oc1ccccc1C(=O)O'
 score: 88.856
 
@@ -19,7 +21,7 @@ score: 88.856
 score: 41.399
 
 # screening
->>> python screening.py ./data/examples/chembl_1k.smi -o ./out.csv --naive --cuda
+>>> python screening.py data/examples/chembl_1k.smi -o out.csv --naive --cuda
 ```
 
 - `88.856` is the predicted score. The higher the score, the higher the **drug-likeness**.
@@ -60,8 +62,8 @@ score_list = model.screening(smiles_list=['c1ccccc1', 'CCN'], naive=True, batch_
 
 | Model Name              | Description                                                                                 |
 | :---------------------- | :------------------------------------------------------------------------------------------ |
-| `extended`              | **New model** trained on an updated drug database. (excluding test set: FDA-approved drugs) |
-| `chemsci-2025`          | **Improved model** trained on the same dataset as the paper.                                |
+| `extended` (default)              | **New model** trained on an updated drug database. (excluding test set: FDA-approved drugs) |
+| `chemsci-2025`          | **Retrained model** of `chemsci-2021` with hyperparameter tuning.                |
 | `chemsci-2021`          | **Finetuned model** from the paper (PubChem pretrained, World Drug finetuned).              |
 | `chemsci-2021-pretrain` | **Pretrained model** from the paper (trained on PubChem)                                    |
 
@@ -99,7 +101,7 @@ python ./scripts/finetune.py --data_path <smi_file>
 >>> bash ./scripts/download_data.sh
 
 # evaluate the model
->>> python ./scripts/evaluate.py  --cuda
+>>> python ./scripts/evaluate.py --cuda
 
 # Output
 Test 1489 molecules in data/test/fda.smi
@@ -117,12 +119,11 @@ Average score: 52.7382759815216
 Test 10000 molecules in data/test/gdb17.smi
 Average score: 39.37572152862549
 
-fda vs chembl
-AUROC 0.8621576897246337
-fda vs zinc15
-AUROC 0.9606756212222335
-fda vs gdb17
-AUROC 0.9906165883142493
+AUROC
+FDA vs Investigation   : 0.789
+FDA vs ChEMBL          : 0.862
+FDA vs ZINC15          : 0.961
+FDA vs GDB17           : 0.991
 ```
 
 ## Citation

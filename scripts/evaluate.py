@@ -1,13 +1,19 @@
 from argparse import ArgumentParser
+from collections import OrderedDict
 from pathlib import Path
 
 from druglikeness.sdk.api import DrugLikenessClient
 
-FDA = "./data/test/fda.smi"
-INVESTIGATION = "./data/test/investigation.smi"
-CHEMBL = "./data/test/chembl.smi"
-ZINC15 = "./data/test/zinc15.smi"
-GDB17 = "./data/test/gdb17.smi"
+# Test files
+TEST_FILES = {
+    "FDA": "./data/test/fda.smi",
+    "Investigation": "./data/test/investigation.smi",
+    "ChEMBL": "./data/test/chembl.smi",
+    "ZINC15": "./data/test/zinc15.smi",
+    "GDB17": "./data/test/gdb17.smi",
+}
+POSITIVE = "FDA"
+NEGATIVE = ["Investigation", "ChEMBL", "ZINC15", "GDB17"]
 
 
 def parse_args():
@@ -17,6 +23,7 @@ def parse_args():
     parser.add_argument("--naive", action="store_true", help="If True, model only considers one steroisomer")
     parser.add_argument("--cuda", action="store_true", help="If True, use cuda acceleration")
     parser.add_argument("--batch_size", type=int, help="Screening batch size", default=64)
+    parser.add_argument("--plot", type=Path, help="If given, plot the score distribution to the path")
     return parser.parse_args()
 
 
@@ -25,6 +32,10 @@ def construct_model(arch: str, model: str, device: str) -> DrugLikenessClient:
         from druglikeness.deepdl import DeepDL
 
         return DeepDL.from_pretrained(model, device)
+    elif arch in ("doubledeepdl", "deepdl2"):
+        from druglikeness.doubledeepdl import DoubleDeepDL
+
+        return DoubleDeepDL.from_pretrained(model, device)
 
     else:
         raise ValueError(f"Unknown architecture {arch}. Supported is 'deepdl'.")
@@ -67,28 +78,59 @@ def compute_auroc(true_scores: list[float], false_scores: list[float], high_is_b
     return AUC
 
 
+def draw_plot(results: OrderedDict[str, list[float]], path: Path):
+    """Draw violin plot of the results and save to path."""
+    import pandas as pd
+    import seaborn as sns
+    from matplotlib import pyplot as plt
+
+    data = {"Category": [], "Drug-likeness": []}
+
+    for category, scores in results.items():
+        data["Category"].extend([category] * len(scores))
+        data["Drug-likeness"].extend(scores)
+
+    df = pd.DataFrame(data)
+
+    sns.set_style("ticks")
+
+    plt.figure(figsize=(5, 3))
+    sns.violinplot(
+        data=df,
+        x="Category",
+        y="Drug-likeness",
+        inner="box",
+        palette="deep",
+    )
+    plt.xlabel("")
+    plt.ylabel("Drug-likeness", fontsize=13)
+    plt.tight_layout()
+    plt.savefig(path, dpi=300)
+    print(f"Plot saved to {path}")
+
+
 if __name__ == "__main__":
     args = parse_args()
 
     device = "cuda" if args.cuda else "cpu"
     model = construct_model(args.arch, args.model, device)
 
-    results: dict[str, list[float]] = {}
+    results: OrderedDict[str, list[float]] = OrderedDict()
 
-    for test_file in [FDA, INVESTIGATION, CHEMBL, ZINC15, GDB17]:
-        name = Path(test_file).stem
+    for name, test_file in TEST_FILES.items():
         with open(test_file) as f:
             smiles_list = [ln.split()[0] for ln in f.readlines()]
-        print(f"Test {len(smiles_list)} molecules in {test_file}")
+        print(f"Test {len(smiles_list)} molecules in {name}({test_file})")
         score_list = model.screening(smiles_list, args.naive, batch_size=args.batch_size, verbose=True)
         assert len(smiles_list) == len(score_list), "The number of SMILES and scores do not match."
         print("Average score", sum(score_list) / len(score_list))
         print()
         results[name] = score_list
 
-    print("fda vs chembl")
-    print("AUROC", compute_auroc(results["fda"], results["chembl"]))
-    print("fda vs zinc15")
-    print("AUROC", compute_auroc(results["fda"], results["zinc15"]))
-    print("fda vs gdb17")
-    print("AUROC", compute_auroc(results["fda"], results["gdb17"]))
+    print("AUROC")
+    for negative in NEGATIVE:
+        score = compute_auroc(results[POSITIVE], results[negative])
+        print(f"{POSITIVE} vs {negative:<16}: {score:.3f}")
+
+    if args.plot:
+        draw_plot(results, args.plot)

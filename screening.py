@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 
-from druglikeness.deepdl import DeepDL
+from druglikeness.sdk.api import DrugLikenessClient
 
 
 def parse_args():

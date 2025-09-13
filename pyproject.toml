@@ -4,8 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "druglikeness"
+description = 'AI-based drug-likeness prediction'
 authors = [{ name = "Seonghwan Seo", email = "shwan0106@gmail.com" }]
-version = "0.2.0"
+version = "0.2.2"
 readme = "README.md"
 classifiers = [
   "Operating System :: OS Independent",
@@ -15,7 +16,8 @@ classifiers = [
 keywords = ["rnn", "drug-likeness"]
 requires-python = ">=3.9"
 dependencies = ["torch>=1.13.0", "numpy", "rdkit", "gdown", "tqdm"]
-
+[project.urls]
+"Homepage" = "https://github.com/Seonghwan/drug-likeness"
 
 [project.optional-dependencies]
 train = ["lightning", "wandb"]

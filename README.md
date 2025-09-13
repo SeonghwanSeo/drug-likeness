@@ -31,13 +31,13 @@ score: 41.399
 ## Installation
 
 ```bash
+# use pip
+pip install druglikeness
+
 # from official github (python 3.9-3.13)
 git clone https://github.com/SeonghwanSeo/drug-likeness.git
 cd drug-likeness
 pip install -e .
-
-# use pip to install in other project
-pip install git+https://github.com/SeonghwanSeo/drug-likeness.git
 ```
 
 ## Python API

@@ -1,9 +1,14 @@
 from pathlib import Path
-from typing import Optional
 
 import lightning as L
 import torch
-from lightning.pytorch.callbacks import Callback, EarlyStopping, LearningRateMonitor, ModelCheckpoint, ModelSummary
+from lightning.pytorch.callbacks import (
+    Callback,
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+    ModelSummary,
+)
 from lightning.pytorch.loggers.wandb import WandbLogger
 from torch.utils.data import DataLoader
 
@@ -23,7 +28,9 @@ def build_trainer(config: DeepDLTrainConfig) -> L.Trainer:
         save_top_k=3,
     )
     lr_monitor = LearningRateMonitor("step")
-    early_stopping = EarlyStopping(monitor=config.monitor, mode=config.monitor_mode, verbose=False, min_delta=0.02)
+    early_stopping = EarlyStopping(
+        monitor=config.monitor, mode=config.monitor_mode, verbose=False, min_delta=0.02
+    )
     callbacks: list[Callback] = [summary, checkpointing, lr_monitor, early_stopping]
 
     if config.use_wandb:
@@ -60,7 +67,9 @@ def build_dataloaders(config: DeepDLTrainConfig) -> tuple[DataLoader, DataLoader
         train_set_size = int(len(train_set) * config.split_ratio)
         valid_set_size = len(train_set) - train_set_size
         generator = torch.Generator().manual_seed(config.seed)
-        train_set, valid_set = torch.utils.data.random_split(train_set, [train_set_size, valid_set_size], generator)
+        train_set, valid_set = torch.utils.data.random_split(
+            train_set, [train_set_size, valid_set_size], generator
+        )
     else:
         # use the same dataset for training and validation
         valid_set = train_set

@@ -50,13 +50,17 @@ class SmilesDataset(Dataset):
         smi = self.smiles_list[idx]
         # random stereo-isomer
         isomers = list(EnumerateStereoisomers(Chem.MolFromSmiles(smi)))
-        smi = Chem.MolToSmiles(isomers[random.randint(0, len(isomers) - 1)], isomericSmiles=True)
+        smi = Chem.MolToSmiles(
+            isomers[random.randint(0, len(isomers) - 1)], isomericSmiles=True
+        )
         smi += self.eos_token
         sequence = torch.tensor([self.vocab[c] for c in smi])
         return sequence
 
 
-def collate_fn(batch: list[torch.Tensor], pad_token_id=PAD_TOKEN_ID) -> tuple[torch.Tensor, torch.Tensor]:
+def collate_fn(
+    batch: list[torch.Tensor], pad_token_id=PAD_TOKEN_ID
+) -> tuple[torch.Tensor, torch.Tensor]:
     # sort by length in descending order (RNN expects sequences in descending order)
     batch = sorted(batch, key=lambda x: x.size(0), reverse=True)
     seqs = pad_sequence(batch, batch_first=True, padding_value=pad_token_id)

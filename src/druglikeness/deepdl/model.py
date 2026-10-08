@@ -93,13 +93,16 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
         else:
             checkpoint_path = Path(pretrained_model_name_or_path)
             assert checkpoint_path.exists(), (
-                f"Model path {checkpoint_path} does not exist., Supported Models: {list(NAMES.keys())}"
+                f"Model path {checkpoint_path} does not exist., "
+                f"Supported Models: {list(NAMES.keys())}"
             )
 
         model = cls(config)
         model = model.to(device)
 
-        state_dict = torch.load(checkpoint_path, map_location=device.type, weights_only=False)
+        state_dict = torch.load(
+            checkpoint_path, map_location=device.type, weights_only=False
+        )
         if "state_dict" in state_dict:
             state_dict = state_dict["state_dict"]
         model.load_state_dict(state_dict)
@@ -136,17 +139,27 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
             if naive:
                 isomers = [Chem.MolToSmiles(next(EnumerateStereoisomers(mol)))]
             else:
-                isomers = [Chem.MolToSmiles(isomer) for isomer in EnumerateStereoisomers(mol)]
+                isomers = [
+                    Chem.MolToSmiles(isomer) for isomer in EnumerateStereoisomers(mol)
+                ]
             all_smiles.extend(isomers)
             indices.append((ofs, len(isomers)))
             ofs += len(isomers)
 
-        iterator = tqdm(range(0, len(all_smiles), batch_size), desc="screening", unit="batch", disable=not verbose)
+        iterator = tqdm(
+            range(0, len(all_smiles), batch_size),
+            desc="screening",
+            unit="batch",
+            disable=not verbose,
+        )
         flatten_scores: list[float] = sum(
-            [self.evaluate_batch(all_smiles[i : i + batch_size]) for i in iterator], start=[]
+            [self.evaluate_batch(all_smiles[i : i + batch_size]) for i in iterator],
+            start=[],
         )
         smi_to_scores: dict[str, float] = {}
-        assert len(sorted_smiles_list) == len(indices), "Mismatch in smiles and indices length."
+        assert len(sorted_smiles_list) == len(indices), (
+            "Mismatch in smiles and indices length."
+        )
         for smi, (ofs, num_isomers) in zip(sorted_smiles_list, indices):
             if num_isomers == 0:
                 # for invalid SMILES
@@ -175,10 +188,14 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
         start_codon = self.start_codon.expand_as(x[:, :1, :])  # [B, 1, F]
         x = torch.cat([start_codon, x], 1)  # [B, L, F]
 
-        packed_seq = pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=True)
+        packed_seq = pack_padded_sequence(
+            x, lengths.cpu(), batch_first=True, enforce_sorted=True
+        )
         packed_x, _ = self.GRU(packed_seq)
 
-        packed_logits = PackedSequence(self.fc(packed_x.data), packed_seq.batch_sizes)  # [Lpacked, F] => [Lpacked, C]
+        packed_logits = PackedSequence(
+            self.fc(packed_x.data), packed_seq.batch_sizes
+        )  # [Lpacked, F] => [Lpacked, C]
         logits, _ = pad_packed_sequence(packed_logits, batch_first=True)  # [B, L, F]
         return logits
 
@@ -193,7 +210,9 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
         logits[:, :, self.pad_token_id] = -torch.inf  # mask padding
         log_p_chars = logits.log_softmax(dim=-1)  # [B, L, C]
 
-        log_p_tokens = torch.gather(log_p_chars, dim=2, index=seq.unsqueeze(-1)).squeeze(-1)  # [B, L]
+        log_p_tokens = torch.gather(log_p_chars, dim=2, index=seq.unsqueeze(-1)).squeeze(
+            -1
+        )  # [B, L]
         log_p_tokens[log_p_tokens.isneginf()] = 0.0  # mask padding
         log_p_seq = log_p_tokens.sum(dim=-1)  # [B,]
         return log_p_seq
@@ -209,11 +228,14 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
             max_length: Maximum length of the output tensor.
 
         Returns:
-            tokenized_tensor: A tensor of shape [max_length, batch_size] containing token IDs.
+            tokenized_tensor: A tensor of shape [max_length, batch_size]
+                containing token IDs.
             lengths: A length of each sequence
         """
         batch_size = len(input)
-        assert batch_size > 0, "There is no input SMILES. Please provide at least one SMILES string."
+        assert batch_size > 0, (
+            "There is no input SMILES. Please provide at least one SMILES string."
+        )
 
         # add eos token to each sequence
         input = [seq + self.eos_token for seq in input]
@@ -224,15 +246,21 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
 
         tokenized: list[list[int]] = []
         for smi, length in zip(input, length_list):
-            tk_smi = [self.vocab[c] for c in smi] + [self.pad_token_id] * (max_length - length)
+            tk_smi = [self.vocab[c] for c in smi] + [self.pad_token_id] * (
+                max_length - length
+            )
             tokenized.append(tk_smi)
-        tokenized_tensor = torch.tensor(tokenized, dtype=torch.long, device=self.device)  # [B, L]
+        tokenized_tensor = torch.tensor(
+            tokenized, dtype=torch.long, device=self.device
+        )  # [B, L]
         lengths = torch.tensor(length_list, dtype=torch.long)  # [B,]
         return tokenized_tensor, lengths
 
     def evaluate_batch(self, smiles_list: list[str]) -> list[float]:
         # sort SMILES by length in descending order
-        indices = sorted(range(len(smiles_list)), key=lambda i: len(smiles_list[i]), reverse=True)
+        indices = sorted(
+            range(len(smiles_list)), key=lambda i: len(smiles_list[i]), reverse=True
+        )
         smiles_list = [smiles_list[i] for i in indices]
 
         x, lengths = self.encode(smiles_list)
@@ -243,7 +271,9 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
         score_list = [score for _, score in indice_score_list]
         return score_list
 
-    def _calc_scores_batch(self, seq: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+    def _calc_scores_batch(
+        self, seq: torch.Tensor, lengths: torch.Tensor
+    ) -> torch.Tensor:
         """Calculate normalized scores for a batch of SMILES.
 
         Parameters

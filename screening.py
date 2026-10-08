@@ -6,11 +6,23 @@ from druglikeness.sdk.api import DrugLikenessClient
 def parse_args():
     parser = ArgumentParser(description="Calculate Drug-likeness With Model")
     parser.add_argument("test_file", type=str, help="input smiles file (.smi)")
-    parser.add_argument("-o", "--output", type=str, required=True, help="result file (.csv)")
-    parser.add_argument("-m", "--model", type=str, default="extended", help="Model name or path")
-    parser.add_argument("-a", "--arch", type=str, default="deepdl", help="Architecture of the model.")
-    parser.add_argument("--naive", action="store_true", help="If True, model only considers one steroisomer")
-    parser.add_argument("--cuda", action="store_true", help="If True, use cuda acceleration")
+    parser.add_argument(
+        "-o", "--output", type=str, required=True, help="result file (.csv)"
+    )
+    parser.add_argument(
+        "-m", "--model", type=str, default="extended", help="Model name or path"
+    )
+    parser.add_argument(
+        "-a", "--arch", type=str, default="deepdl", help="Architecture of the model."
+    )
+    parser.add_argument(
+        "--naive",
+        action="store_true",
+        help="If True, model only considers one steroisomer",
+    )
+    parser.add_argument(
+        "--cuda", action="store_true", help="If True, use cuda acceleration"
+    )
     parser.add_argument("--batch_size", type=int, help="Screening batch size", default=64)
     return parser.parse_args()
 
@@ -35,8 +47,12 @@ if __name__ == "__main__":
         smiles_list = [ln.split()[0] for ln in f.readlines()]
 
     print(f"Screening {len(smiles_list)} SMILES")
-    score_list = model.screening(smiles_list, args.naive, batch_size=args.batch_size, verbose=True)
-    assert len(smiles_list) == len(score_list), "The number of SMILES and scores do not match."
+    score_list = model.screening(
+        smiles_list, args.naive, batch_size=args.batch_size, verbose=True
+    )
+    assert len(smiles_list) == len(score_list), (
+        "The number of SMILES and scores do not match."
+    )
 
     with open(args.output, "w") as w:
         w.write("SMILES,Score\n")

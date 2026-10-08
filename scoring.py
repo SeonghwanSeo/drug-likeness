@@ -6,9 +6,17 @@ from druglikeness.sdk.api import DrugLikenessClient
 def parse_args():
     parser = ArgumentParser(description="Calculate Drug-likeness With Model")
     parser.add_argument("smiles", type=str, help="test smiles")
-    parser.add_argument("-m", "--model", type=str, default="extended", help="Model name or path")
-    parser.add_argument("-a", "--arch", type=str, default="deepdl", help="Architecture of the model.")
-    parser.add_argument("--naive", action="store_true", help="If True, model only considers one steroisomer")
+    parser.add_argument(
+        "-m", "--model", type=str, default="extended", help="Model name or path"
+    )
+    parser.add_argument(
+        "-a", "--arch", type=str, default="deepdl", help="Architecture of the model."
+    )
+    parser.add_argument(
+        "--naive",
+        action="store_true",
+        help="If True, model only considers one steroisomer",
+    )
     args = parser.parse_args()
     return args
 

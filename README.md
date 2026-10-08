@@ -46,16 +46,16 @@ pip install -e .
 from druglikeness.deepdl import DeepDL
 
 # Enter the name of model (see `# Model List`) or the path of your own model.
-pretrained_model_name_or_path = 'extended'
+pretrained_model_name_or_path = "extended"
 
 # This will download the model weights if you provide the model name.
 model = DeepDL.from_pretrained(pretrained_model_name_or_path, device="cpu")
 
 # Evaluate the molecule.
-score = model.scoring(smiles='CC(=O)Oc1ccccc1C(=O)O', naive=False)
+score = model.scoring(smiles="CC(=O)Oc1ccccc1C(=O)O", naive=False)
 
 # Screen the molecules.
-score_list = model.screening(smiles_list=['c1ccccc1', 'CCN'], naive=True, batch_size=64)
+score_list = model.screening(smiles_list=["c1ccccc1", "CCN"], naive=True, batch_size=64)
 ```
 
 ## Model List

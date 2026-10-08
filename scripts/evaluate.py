@@ -18,12 +18,24 @@ NEGATIVE = ["Investigation", "ChEMBL", "ZINC15", "GDB17"]
 
 def parse_args():
     parser = ArgumentParser(description="Calculate Drug-likeness With Model")
-    parser.add_argument("-m", "--model", type=str, default="extended", help="Model name or path")
-    parser.add_argument("-a", "--arch", type=str, default="deepdl", help="Architecture of the model.")
-    parser.add_argument("--naive", action="store_true", help="If True, model only considers one steroisomer")
-    parser.add_argument("--cuda", action="store_true", help="If True, use cuda acceleration")
+    parser.add_argument(
+        "-m", "--model", type=str, default="extended", help="Model name or path"
+    )
+    parser.add_argument(
+        "-a", "--arch", type=str, default="deepdl", help="Architecture of the model."
+    )
+    parser.add_argument(
+        "--naive",
+        action="store_true",
+        help="If True, model only considers one steroisomer",
+    )
+    parser.add_argument(
+        "--cuda", action="store_true", help="If True, use cuda acceleration"
+    )
     parser.add_argument("--batch_size", type=int, help="Screening batch size", default=64)
-    parser.add_argument("--plot", type=Path, help="If given, plot the score distribution to the path")
+    parser.add_argument(
+        "--plot", type=Path, help="If given, plot the score distribution to the path"
+    )
     return parser.parse_args()
 
 
@@ -41,7 +53,9 @@ def construct_model(arch: str, model: str, device: str) -> DrugLikenessClient:
         raise ValueError(f"Unknown architecture {arch}. Supported is 'deepdl'.")
 
 
-def compute_auroc(true_scores: list[float], false_scores: list[float], high_is_better: bool = True) -> float:
+def compute_auroc(
+    true_scores: list[float], false_scores: list[float], high_is_better: bool = True
+) -> float:
     """Determines a ROC curve"""
     assert len(true_scores) > 0, "true_scores must not be empty"
     assert len(false_scores) > 0, "false_scores must not be empty"
@@ -64,8 +78,12 @@ def compute_auroc(true_scores: list[float], false_scores: list[float], high_is_b
             num_falses += 1
         TP.append(num_trues)  # TP
         FP.append(num_falses)  # FP
-    assert num_trues == len(true_scores), "Number of true scores does not match the number of true labels"
-    assert num_falses == len(false_scores), "Number of false scores does not match the number of false labels"
+    assert num_trues == len(true_scores), (
+        "Number of true scores does not match the number of true labels"
+    )
+    assert num_falses == len(false_scores), (
+        "Number of false scores does not match the number of false labels"
+    )
 
     # normalize, check that there are actives and inactives
     TPR = [i / num_trues for i in TP]  # True positive rate: TP/(TP+FN)
@@ -121,8 +139,12 @@ if __name__ == "__main__":
         with open(test_file) as f:
             smiles_list = [ln.split()[0] for ln in f.readlines()]
         print(f"Test {len(smiles_list)} molecules in {name}({test_file})")
-        score_list = model.screening(smiles_list, args.naive, batch_size=args.batch_size, verbose=True)
-        assert len(smiles_list) == len(score_list), "The number of SMILES and scores do not match."
+        score_list = model.screening(
+            smiles_list, args.naive, batch_size=args.batch_size, verbose=True
+        )
+        assert len(smiles_list) == len(score_list), (
+            "The number of SMILES and scores do not match."
+        )
         print("Average score", sum(score_list) / len(score_list))
         print()
         results[name] = score_list

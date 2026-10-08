@@ -30,7 +30,11 @@ class DeepDLTrainingModule(L.LightningModule):
         checkpoint["state_dict"] = new_state_dict
 
     def configure_optimizers(self):
-        optimizer = AdamW(self.model.parameters(), lr=self.config.lr, weight_decay=self.config.weight_decay)
+        optimizer = AdamW(
+            self.model.parameters(),
+            lr=self.config.lr,
+            weight_decay=self.config.weight_decay,
+        )
 
         total_steps = int(self.trainer.estimated_stepping_batches)
         warmup_steps = int(total_steps * self.config.warmup_ratio)
@@ -102,7 +106,9 @@ class DeepDLFinetuningModule(DeepDLTrainingModule):
             {"params": self.model.fc.parameters(), "lr": lr_head},
         ]
 
-        optimizer = AdamW(parameter_groups, lr=self.config.lr, weight_decay=self.config.weight_decay)
+        optimizer = AdamW(
+            parameter_groups, lr=self.config.lr, weight_decay=self.config.weight_decay
+        )
 
         total_steps = int(self.trainer.estimated_stepping_batches)
         warmup_steps = int(total_steps * self.config.warmup_ratio)

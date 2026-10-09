@@ -19,7 +19,7 @@ from typing_extensions import Self
 
 from druglikeness.sdk.api import DrugLikenessClient, ModelConfig
 
-from .tokenizer import SmilesTokenizer
+from .tokenizer import VOCAB_PATH, SmilesTokenizer
 from .transformer import TransformerStack
 
 
@@ -30,7 +30,7 @@ class DeepDL2Config(ModelConfig):
     hidden_size: int = 384
     n_layers: int = 8
     n_heads: int = 6
-    dropout: float = 0.1
+    dropout: float = 0.1  # GRU only; the Transformer has no dropout
 
     @classmethod
     def preset(cls, name: str = "medium", **overrides: Any) -> Self:
@@ -189,7 +189,6 @@ class DeepDL2_Base(DrugLikenessClient[DeepDL2Config]):
         torch.save(
             {
                 "config": self.config.to_dict(),
-                "tokens": list(self.tokenizer.tokens),
                 "state_dict": self.state_dict(),
             },
             path,
@@ -201,12 +200,13 @@ class DeepDL2_Base(DrugLikenessClient[DeepDL2Config]):
         pretrained_model_name_or_path: Union[str, Path],
         device: Union[torch.device, str] = "cpu",
         config: Optional[DeepDL2Config] = None,
+        token_path: Union[str, Path] = VOCAB_PATH,
     ) -> "DeepDL2_Base":
         checkpoint = torch.load(
             pretrained_model_name_or_path, map_location="cpu", weights_only=True
         )
         config = config or DeepDL2Config(**checkpoint["config"])
-        model = cls.from_config(config, SmilesTokenizer(checkpoint["tokens"]))
+        model = cls.from_config(config, SmilesTokenizer(token_path))
         state = {
             key.removeprefix("model."): value
             for key, value in checkpoint["state_dict"].items()

@@ -2,11 +2,12 @@
 
 import re
 from collections.abc import Iterable
-from importlib.resources import files
 from pathlib import Path
-from typing import Optional, Union
+from typing import Union
 
 from typing_extensions import Self
+
+VOCAB_PATH: Path = Path(__file__).with_name("vocab.txt")
 
 OUTER = re.compile(r"\[[^\[\]\s]+\]|Cl|Br|%\([0-9]+\)|%[0-9]{2}|->|<-|[\s\S]")
 BRACKET = re.compile(r"\[([0-9]*)([A-Z][a-z]?|si|se|as|te|[bcnops]|\*)(.*)\]")
@@ -14,12 +15,8 @@ CHIRAL_CLASSES = {"TH", "AL", "SP", "TB", "OH"}
 
 
 class SmilesTokenizer:
-    def __init__(self, tokens: Optional[Iterable[str]] = None) -> None:
-        self.tokens: tuple[str, ...] = tuple(
-            tokens
-            if tokens is not None
-            else files(__package__).joinpath("vocab.txt").read_text().splitlines()
-        )
+    def __init__(self, token_path: Union[str, Path] = VOCAB_PATH) -> None:
+        self.tokens: tuple[str, ...] = tuple(Path(token_path).read_text().splitlines())
         self.token_to_id: dict[str, int] = {
             token: i for i, token in enumerate(self.tokens)
         }
@@ -32,7 +29,7 @@ class SmilesTokenizer:
 
     @classmethod
     def from_file(cls, path: Union[str, Path]) -> Self:
-        return cls(Path(path).read_text().splitlines())
+        return cls(path)
 
     def save(self, path: Union[str, Path]) -> None:
         Path(path).write_text("\n".join(self.tokens) + "\n")

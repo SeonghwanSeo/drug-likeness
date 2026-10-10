@@ -20,6 +20,7 @@ class DeepDL2TrainConfig:
     model: DeepDL2Config = field(default_factory=DeepDL2Config)
     stage: str = "pretrain"
     init_checkpoint: Optional[str] = None
+    init_optimizer: bool = False  # restore Adam state, but start a new stage
     resume_checkpoint: Optional[str] = None  # model/optimizer/loop; no data cursor
     batch_size: int = 256  # per device, before gradient accumulation
     max_length: int = 127  # SMILES tokens; input width includes one BOS/EOS slot
@@ -55,7 +56,7 @@ class DeepDL2TrainingModule(L.LightningModule):
     def __init__(self, config: DeepDL2TrainConfig) -> None:
         super().__init__()
         self.config: DeepDL2TrainConfig = config
-        source = config.init_checkpoint or config.resume_checkpoint
+        source = config.resume_checkpoint or config.init_checkpoint
         self.model: DeepDL2 = (
             DeepDL2.from_pretrained(source)
             if source
@@ -78,6 +79,7 @@ class DeepDL2TrainingModule(L.LightningModule):
         )
 
     def configure_optimizers(self) -> OptimizerLRSchedulerConfig:
+        c = self.config
         optimizer = torch.optim.AdamW(
             self.model.parameters(),
             lr=self.config.lr,
@@ -85,7 +87,21 @@ class DeepDL2TrainingModule(L.LightningModule):
             eps=self.config.eps,
             weight_decay=self.config.weight_decay,
         )
-        c = self.config
+        if c.init_optimizer and not c.resume_checkpoint:
+            checkpoint = torch.load(
+                c.init_checkpoint, map_location="cpu", weights_only=True
+            )
+            optimizer.load_state_dict(checkpoint["optimizer_states"][0])
+            # Keep moments and Adam's step counter; use this stage's settings.
+            for group in optimizer.param_groups:
+                group.update(
+                    lr=c.lr,
+                    initial_lr=c.lr,
+                    betas=c.betas,
+                    eps=c.eps,
+                    weight_decay=c.weight_decay,
+                )
+            del checkpoint
         total_steps = self.trainer.estimated_stepping_batches
 
         def schedule(step: int) -> float:

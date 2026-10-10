@@ -1,15 +1,50 @@
-# Template: prepare a SMILES HF dataset; these settings are not tuned.
+# Model
 model: large
 stage: stage2_pubchem
-train_data: "???"  # HF dataset directory with a smiles string column.
+seed: 42
+
+# Data and checkpoints
+train_data: "???"
+val_data: null  # null: train-only
 save_dir: result/deepdl2/large_stage2_pubchem
-init_checkpoint: "???"  # Pretrained ZINC model or Lightning checkpoint.
+init_checkpoint: "???"  # Lightning .ckpt when loading optimizer state.
+init_optimizer: true  # Carry Adam state into a new stage.
+resume_checkpoint: null  # Full training state.
+
+# Runtime and batch size
+accelerator: gpu
 devices: auto
-batch_size: 128
-global_batch_size: 16384
+precision: bf16-mixed
+batch_size: 128  # Per GPU.
+global_batch_size: 16384  # batch_size * devices * accumulation; accumulation is inferred.
+
+# Data loading
 num_workers: 2
-max_length: 255
+shuffle_buffer: 10000
+max_length: 255  # Excludes BOS/EOS; longer SMILES are truncated.
+
+# Training duration
+max_epochs: 10
+max_steps: -1  # -1: no step limit
+
+# Optimizer
 lr: 0.0003
-warmup_steps: 500
-max_epochs: 1
+betas: [0.9, 0.95]
+eps: 1.0e-8
+weight_decay: 0.01
+gradient_clip_val: 1.0
+
+# LR schedule (optimizer steps)
+warmup_steps: 0
+decay_steps: 0  # 0: warmup + constant LR
+min_lr_ratio: 0.1  # Used only with decay.
+
+# Compilation
+compile_model: true
+compile_mode: default  # default / reduce-overhead / max-autotune / max-autotune-no-cudagraphs
+
+# Checkpointing and logging (optimizer steps)
 save_every_n_steps: 760
+val_every_n_steps: 1000
+log_every_n_steps: 100
+use_wandb: false

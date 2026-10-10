@@ -71,7 +71,7 @@ def train_deepdl2(config: DeepDL2TrainConfig) -> tuple[L.Trainer, DeepDL2Trainin
         check_val_every_n_epoch=None,
         val_check_interval=config.val_every_n_steps * config.accumulate_grad_batches,
         log_every_n_steps=config.log_every_n_steps,
-        enable_progress_bar=False,
+        enable_progress_bar=True,
         num_sanity_val_steps=0,
         limit_val_batches=1.0 if config.val_data else 0,
         callbacks=callbacks,

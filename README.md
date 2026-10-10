@@ -94,22 +94,40 @@ python ./scripts/train_deepdl.py --data_path ./data/train/worlddrug_not_fda.smi
 python ./scripts/train_deepdl.py --data_path <smi_file>
 ```
 
-Train DeepDL2 with CLI arguments. Set `train_data` to a Hugging Face
-`save_to_disk` dataset, `save_dir` to the output directory, and `devices` to the
-number of GPUs. Lightning launches distributed training when `devices` is greater
-than one.
+Train DeepDL2 with a YAML config in `configs/deepdl2/`. Set `train_data` to a Hugging Face
+`save_to_disk` dataset and `save_dir` to the output directory. The supplied configs
+use `???` for dataset and pretrained checkpoint paths for the user to fill in. By default, all
+visible GPUs are used; `devices: N` in YAML selects a GPU count. Lightning launches
+distributed training automatically.
 
 ```bash
 pip install -e '.[train,deepdl2]'
-python ./scripts/train_deepdl2.py \
-    --train_data /path/to/zinc20 \
-    --save_dir result/deepdl2/medium \
-    --model medium --devices 8 \
-    --batch_size 512 --accumulate_grad_batches 4 \
-    --lr 3e-4 --warmup_steps 2000 --max_epochs 1
+python scripts/train_deepdl2.py configs/deepdl2/medium_stage1_zinc20.yaml
+
+# Continue with PubChem after preparing its HF dataset and completing stage 1.
+python scripts/train_deepdl2.py configs/deepdl2/medium_stage2_pubchem.yaml
+
+# Resume an interrupted stage, including optimizer and scheduler state.
+python scripts/train_deepdl2.py configs/deepdl2/medium_stage1_zinc20.yaml \
+    --resume_checkpoint result/deepdl2/medium_stage1_zinc20/checkpoints/last.ckpt
 ```
 
-The resolved training configuration is saved to `save_dir/config.json`.
+`batch_size` is per GPU. Gradient accumulation is computed as
+`global_batch_size // (batch_size * devices)`, following esm-open. Choose a global
+batch that is a positive integer multiple of `batch_size * devices`.
+Global batch counts molecules, not tokens; `max_length` excludes BOS/EOS.
+The CLI does not probe GPU memory or tune the per-GPU batch size.
+Defaults include the medium model, BF16 mixed precision, compile mode `default`,
+LR `3e-4`, and logging every 100 optimizer steps. The resolved training
+configuration is saved to `save_dir/config.json`.
+
+Configs are named `<size>_stage<number>_<dataset>.yaml` for small, medium and large.
+Stage 1 uses ZINC20 with a 127-token limit. Stage 2 initializes from stage 1 model
+weights, starts a new optimizer/schedule, and uses PubChem with a 255-token limit.
+PubChem configs are templates: prepare a 255-token HF dataset before running;
+their LR, batch size and epoch count have not been tuned. Relative paths resolve from the
+working directory; run these commands from the repository root. Update dataset
+and checkpoint paths for another machine or existing training run.
 
 ## Evaluation
 

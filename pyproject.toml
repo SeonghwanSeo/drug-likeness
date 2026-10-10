@@ -20,7 +20,7 @@ dependencies = ["torch>=1.13.0", "numpy", "rdkit", "gdown", "tqdm"]
 "Homepage" = "https://github.com/Seonghwan/drug-likeness"
 
 [project.optional-dependencies]
-train = ["lightning", "wandb", "pyarrow", "datasets>=4", "beautifulsoup4"]
+train = ["lightning", "wandb", "pyarrow", "datasets>=4", "beautifulsoup4", "pyyaml"]
 eval = ["matplotlib", "seaborn"]
 deepdl2 = ["torch>=2.1"]
 

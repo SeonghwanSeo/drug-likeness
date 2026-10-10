@@ -5,45 +5,43 @@ seed: 42
 
 # Data and checkpoints
 train_data: "???"
-val_data: null  # null: train-only
+val_data: null
 save_dir: result/deepdl2/small_stage2_pubchem
-init_checkpoint: "???"  # Lightning .ckpt when loading optimizer state.
-init_optimizer: true  # Carry Adam state into a new stage.
-resume_checkpoint: null  # Full training state.
+pretrained_model: "???"
+resume_checkpoint: null
 
 # Runtime and batch size
 accelerator: gpu
 devices: auto
 precision: bf16-mixed
-batch_size: 512  # Per GPU.
-global_batch_size: 16384  # batch_size * devices * accumulation; accumulation is inferred.
+batch_size: 512
+global_batch_size: 16384
 
 # Data loading
 num_workers: 2
-shuffle_buffer: 10000
-max_length: 255  # Excludes BOS/EOS; longer SMILES are truncated.
+shuffle_buffer: 100000
+max_length: 255
 
 # Training duration
 max_epochs: 10
-max_steps: -1  # -1: no step limit
 
 # Optimizer
-lr: 0.0003
+lr: 0.0001
 betas: [0.9, 0.95]
 eps: 1.0e-8
 weight_decay: 0.01
 gradient_clip_val: 1.0
 
-# LR schedule (optimizer steps)
-warmup_steps: 0
-decay_steps: 0  # 0: warmup + constant LR
-min_lr_ratio: 0.1  # Used only with decay.
+# LR schedule
+warmup_steps: 500
+decay_steps: 0
+min_lr_ratio: 0.1
 
 # Compilation
 compile_model: true
-compile_mode: default  # default / reduce-overhead / max-autotune / max-autotune-no-cudagraphs
+compile_mode: default
 
-# Checkpointing and logging (optimizer steps)
+# Checkpointing and logging
 save_every_n_steps: 760
 val_every_n_steps: 1000
 log_every_n_steps: 100

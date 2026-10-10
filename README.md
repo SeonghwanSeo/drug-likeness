@@ -102,12 +102,12 @@ use `???` for dataset and pretrained checkpoint paths for the user to fill in. B
 visible GPUs are used; `devices: N` in YAML selects a GPU count. Lightning launches
 distributed training automatically.
 
-For PubChem continuation, set `init_checkpoint` to a ZINC Lightning `.ckpt` file.
-The PubChem configs use `init_optimizer: true` to carry over Adam moments and its
-step counter, while starting a new epoch counter and LR schedule from the YAML
-settings (`warmup_steps: 0`). Set `init_optimizer: false` for weights-only loading.
+For PubChem continuation, set `pretrained_model` to a ZINC Lightning `.ckpt` file
+or exported `model.pt`. Only model weights are loaded; each new stage starts with
+a fresh optimizer and LR schedule. PubChem configs use LR `1e-4` and 500 warmup
+steps. Both stages use a shuffle buffer of 100,000 molecules.
 `resume_checkpoint` takes precedence and restores the full interrupted training
-state instead. Exported `model.pt` files contain no optimizer state.
+state, including the optimizer and scheduler, but not the data cursor.
 
 ```bash
 pip install -e '.[train,deepdl2]'

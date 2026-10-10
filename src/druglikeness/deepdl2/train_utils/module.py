@@ -19,18 +19,16 @@ class DeepDL2TrainConfig:
     val_data: Optional[str] = None
     model: DeepDL2Config = field(default_factory=DeepDL2Config)
     stage: str = "pretrain"
-    init_checkpoint: Optional[str] = None
-    init_optimizer: bool = False  # restore Adam state, but start a new stage
-    resume_checkpoint: Optional[str] = None  # model/optimizer/loop; no data cursor
-    batch_size: int = 256  # per device, before gradient accumulation
-    max_length: int = 127  # SMILES tokens; input width includes one BOS/EOS slot
+    pretrained_model: Optional[str] = None
+    resume_checkpoint: Optional[str] = None
+    batch_size: int = 512
+    max_length: int = 127
     accumulate_grad_batches: int = 1
     num_workers: int = 4
-    shuffle_buffer: int = 10000
+    shuffle_buffer: int = 100000
     max_epochs: int = 5
-    max_steps: int = -1
     warmup_steps: int = 500
-    decay_steps: int = 0  # final cosine decay; 0 keeps the stable LR
+    decay_steps: int = 0
     lr: float = 3e-4
     betas: tuple[float, float] = (0.9, 0.95)
     eps: float = 1e-8
@@ -56,7 +54,7 @@ class DeepDL2TrainingModule(L.LightningModule):
     def __init__(self, config: DeepDL2TrainConfig) -> None:
         super().__init__()
         self.config: DeepDL2TrainConfig = config
-        source = config.resume_checkpoint or config.init_checkpoint
+        source = config.resume_checkpoint or config.pretrained_model
         self.model: DeepDL2 = (
             DeepDL2.from_pretrained(source)
             if source
@@ -87,21 +85,6 @@ class DeepDL2TrainingModule(L.LightningModule):
             eps=self.config.eps,
             weight_decay=self.config.weight_decay,
         )
-        if c.init_optimizer and not c.resume_checkpoint:
-            checkpoint = torch.load(
-                c.init_checkpoint, map_location="cpu", weights_only=True
-            )
-            optimizer.load_state_dict(checkpoint["optimizer_states"][0])
-            # Keep moments and Adam's step counter; use this stage's settings.
-            for group in optimizer.param_groups:
-                group.update(
-                    lr=c.lr,
-                    initial_lr=c.lr,
-                    betas=c.betas,
-                    eps=c.eps,
-                    weight_decay=c.weight_decay,
-                )
-            del checkpoint
         total_steps = self.trainer.estimated_stepping_batches
 
         def schedule(step: int) -> float:

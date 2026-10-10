@@ -60,7 +60,6 @@ def train_deepdl2(config: DeepDL2TrainConfig) -> tuple[L.Trainer, DeepDL2Trainin
         accelerator=config.accelerator,
         devices=config.devices,
         strategy=DDPStrategy(broadcast_buffers=False) if config.devices > 1 else "auto",
-        max_steps=config.max_steps,
         max_epochs=config.max_epochs,
         limit_train_batches=datamodule.batches_per_epoch,
         reload_dataloaders_every_n_epochs=1,

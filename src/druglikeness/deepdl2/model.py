@@ -37,7 +37,7 @@ class DeepDL2Config(ModelConfig):
         presets = {
             "small": dict(hidden_size=256, n_layers=8, n_heads=4),
             "medium": dict(hidden_size=384, n_layers=8, n_heads=6),
-            "large": dict(hidden_size=512, n_layers=12, n_heads=8),
+            "large": dict(hidden_size=512, n_layers=8, n_heads=8),
             "gru-medium": dict(
                 architecture="gru", hidden_size=768, n_layers=4, dropout=0.2
             ),

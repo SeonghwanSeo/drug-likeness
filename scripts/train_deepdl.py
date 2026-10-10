@@ -11,13 +11,6 @@ def parse_args():
 
     # pretrained model
     parser.add_argument(
-        "-a",
-        "--arch",
-        type=str,
-        default="deepdl",
-        help="Architecture of the model to be fine-tuned.",
-    )
-    parser.add_argument(
         "--pretrained_model",
         type=str,
         default="chemsci-2021-pretrain",
@@ -94,7 +87,7 @@ def parse_args():
     args = parser.parse_args()
 
     name = args.name if args.name else Path(args.data_path).stem
-    save_dir = Path(args.root_dir) / args.arch / name
+    save_dir = Path(args.root_dir) / "deepdl" / name
 
     config = DeepDLTrainConfig(
         save_dir=save_dir,

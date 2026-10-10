@@ -89,10 +89,27 @@ pip install -e '.[train]'
 
 # train with the 2.8k training set from the paper
 bash ./scripts/download_data.sh
-python ./scripts/finetune.py --data_path ./data/train/worlddrug_not_fda.smi
+python ./scripts/train_deepdl.py --data_path ./data/train/worlddrug_not_fda.smi
 
-python ./scripts/finetune.py --data_path <smi_file>
+python ./scripts/train_deepdl.py --data_path <smi_file>
 ```
+
+Train DeepDL2 with CLI arguments. Set `train_data` to a Hugging Face
+`save_to_disk` dataset, `save_dir` to the output directory, and `devices` to the
+number of GPUs. Lightning launches distributed training when `devices` is greater
+than one.
+
+```bash
+pip install -e '.[train,deepdl2]'
+python ./scripts/train_deepdl2.py \
+    --train_data /path/to/zinc20 \
+    --save_dir result/deepdl2/medium \
+    --model medium --devices 8 \
+    --batch_size 512 --accumulate_grad_batches 4 \
+    --lr 3e-4 --warmup_steps 2000 --max_epochs 1
+```
+
+The resolved training configuration is saved to `save_dir/config.json`.
 
 ## Evaluation
 

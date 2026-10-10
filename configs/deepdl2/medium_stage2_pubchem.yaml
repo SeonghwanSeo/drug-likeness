@@ -1,8 +1,8 @@
-# Template: prepare the HF dataset with a 255-token limit before running.
+# Template: prepare a SMILES HF dataset before running.
 # LR, batch size and duration are starting values, not tuned PubChem settings.
 model: medium
 stage: stage2_pubchem
-train_data: "???"  # User-provided HF dataset directory.
+train_data: "???"  # HF dataset directory with a smiles string column.
 save_dir: result/deepdl2/medium_stage2_pubchem
 init_checkpoint: "???"  # Pretrained ZINC model or Lightning checkpoint.
 devices: auto
@@ -13,4 +13,4 @@ max_length: 255
 lr: 0.0003
 warmup_steps: 500
 max_epochs: 1
-save_every_n_steps: 751  # Approximately 0.1 epoch for 123,189,276 retained rows.
+save_every_n_steps: 760  # Approximately 0.1 epoch for 124,614,123 rows.

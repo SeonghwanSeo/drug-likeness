@@ -1,58 +1,99 @@
-"""Convert whitespace-delimited SMILES files to a Hugging Face dataset."""
+"""SMILES to compressed Parquet, then local Hugging Face Arrow datasets."""
 
+import re
 from collections.abc import Iterable, Iterator
+from io import TextIOWrapper
+from itertools import islice
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Union
+from typing import Optional, Union
 
-from datasets import Dataset, Features, List, Value
+import pyarrow as pa
+import pyarrow.parquet as pq
+from datasets import load_dataset
 
-from ..model import canonicalize
-from ..tokenizer import SmilesTokenizer
+SMILES_SCHEMA: pa.Schema = pa.schema([("smiles", pa.string())])
+ATOM_MAPPING = re.compile(r"\[[^\]]*:\d+\]")
 
 
-def _token_rows(
+def _smiles_rows(
     paths: list[str],
-    tokenizer: SmilesTokenizer,
     smiles_column: int,
     canonical: bool,
-    max_length: int,
-) -> Iterator[dict[str, list[int]]]:
+) -> Iterator[dict[str, str]]:
+    if canonical:
+        from ..model import canonicalize
+
     for path in paths:
-        with open(path) as source:
+        with (
+            pa.input_stream(path) as stream,
+            TextIOWrapper(stream, encoding="utf-8") as source,
+        ):
             for line in source:
                 smiles = line.split()[smiles_column]
                 if canonical:
                     smiles = canonicalize(smiles)
-                tokens = tokenizer.encode(smiles)
-                if len(tokens) - 2 <= max_length:
-                    yield {"token_ids": tokens}
+                if ATOM_MAPPING.search(smiles):
+                    continue
+                yield {"smiles": smiles}
 
 
-def prepare_smiles(
+def smiles_to_parquet(
     paths: Iterable[Union[str, Path]],
     output_dir: Union[str, Path],
-    tokenizer: SmilesTokenizer,
     *,
     smiles_column: int = 0,
     canonical: bool = True,
-    max_length: int = 127,
+    compression_level: int = 5,
+    max_shard_size: int = 500_000_000,
 ) -> dict[str, int]:
-    """Save token IDs including BOS/EOS; omit molecules beyond the length limit."""
+    """Write Parquet shards, rotating at the compressed size target after each group."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True)
+    rows = _smiles_rows([str(path) for path in paths], smiles_column, canonical)
+    count = size = shards = 0
+    batch = list(islice(rows, 100_000))
+    while batch:
+        output_path = output_dir / f"shard-{shards:05d}.parquet"
+        with (
+            pa.OSFile(str(output_path), "wb") as sink,
+            pq.ParquetWriter(
+                sink,
+                SMILES_SCHEMA,
+                compression="zstd",
+                compression_level=compression_level,
+                use_dictionary=False,
+            ) as writer,
+        ):
+            while batch:
+                writer.write_table(pa.Table.from_pylist(batch, schema=SMILES_SCHEMA))
+                count += len(batch)
+                batch = list(islice(rows, 100_000))
+                if sink.tell() >= max_shard_size:
+                    break
+        size += output_path.stat().st_size
+        shards += 1
+    return {"rows": count, "bytes": size, "shards": shards}
+
+
+def parquet_to_arrow(
+    input_dir: Union[str, Path],
+    output_dir: Union[str, Path],
+    *,
+    num_shards: Optional[int] = None,
+    num_proc: Optional[int] = None,
+) -> dict[str, int]:
+    """Decompress Parquet into a memory-mapped HF dataset; do not tokenize."""
     output_dir = Path(output_dir)
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(dir=output_dir.parent) as cache:
-        dataset = Dataset.from_generator(
-            _token_rows,
+        dataset = load_dataset(
+            "parquet",
+            data_files=[str(path) for path in sorted(Path(input_dir).glob("*.parquet"))],
+            columns=["smiles"],
+            split="train",
             cache_dir=cache,
-            features=Features({"token_ids": List(Value("uint8"))}),
-            gen_kwargs={
-                "paths": [str(path) for path in paths],
-                "tokenizer": tokenizer,
-                "smiles_column": smiles_column,
-                "canonical": canonical,
-                "max_length": max_length,
-            },
+            num_proc=num_proc,
         )
-        dataset.save_to_disk(str(output_dir))
+        dataset.save_to_disk(str(output_dir), num_shards=num_shards, num_proc=num_proc)
         return {"rows": len(dataset)}

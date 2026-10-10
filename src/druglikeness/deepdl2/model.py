@@ -153,6 +153,8 @@ class DeepDL2_Base(DrugLikenessClient[DeepDL2Config]):
 
         naive=True uses the first enumerated isomer, as in deepdl. For canonical
         input with unspecified stereo preserved, use log_likelihood instead.
+        Inputs are globally sorted by character length before batching, matching
+        DeepDL screening; returned scores retain the original input order.
         """
         minimum = [math.inf] * len(smiles_list)
         pending: list[tuple[int, str]] = []
@@ -165,9 +167,13 @@ class DeepDL2_Base(DrugLikenessClient[DeepDL2Config]):
                 minimum[index] = min(minimum[index], value)
             pending.clear()
 
-        for index, smiles in enumerate(
-            tqdm(smiles_list, disable=not verbose, desc="screening")
-        ):
+        order = sorted(
+            range(len(smiles_list)),
+            key=lambda i: (len(smiles_list[i]), smiles_list[i]),
+            reverse=True,
+        )
+        for index in tqdm(order, disable=not verbose, desc="screening"):
+            smiles = smiles_list[index]
             mol = Chem.MolFromSmiles(smiles)
             isomers = EnumerateStereoisomers(mol)
             strings = (

@@ -95,7 +95,9 @@ python ./scripts/train_deepdl.py --data_path <smi_file>
 ```
 
 Train DeepDL2 with a YAML config in `configs/deepdl2/`. Set `train_data` to a Hugging Face
-`save_to_disk` dataset and `save_dir` to the output directory. The supplied configs
+`save_to_disk` dataset containing a `smiles` string column and `save_dir` to the
+output directory. DataLoader workers tokenize SMILES when assembling each batch.
+The supplied configs
 use `???` for dataset and pretrained checkpoint paths for the user to fill in. By default, all
 visible GPUs are used; `devices: N` in YAML selects a GPU count. Lightning launches
 distributed training automatically.
@@ -116,6 +118,9 @@ python scripts/train_deepdl2.py configs/deepdl2/medium_stage1_zinc20.yaml \
 `global_batch_size // (batch_size * devices)`, following esm-open. Choose a global
 batch that is a positive integer multiple of `batch_size * devices`.
 Global batch counts molecules, not tokens; `max_length` excludes BOS/EOS.
+Both training and validation keep the first `max_length` lexical tokens, append
+EOS, and pad to `max_length + 1`. The model inserts BOS internally. Overlength
+molecules are truncated rather than dropped, and both loaders use `drop_last=True`.
 The CLI does not probe GPU memory or tune the per-GPU batch size.
 Defaults include the medium model, BF16 mixed precision, compile mode `default`,
 LR `3e-4`, and logging every 100 optimizer steps. The resolved training
@@ -124,10 +129,40 @@ configuration is saved to `save_dir/config.json`.
 Configs are named `<size>_stage<number>_<dataset>.yaml` for small, medium and large.
 Stage 1 uses ZINC20 with a 127-token limit. Stage 2 initializes from stage 1 model
 weights, starts a new optimizer/schedule, and uses PubChem with a 255-token limit.
-PubChem configs are templates: prepare a 255-token HF dataset before running;
+PubChem configs are templates: prepare a SMILES HF dataset before running;
 their LR, batch size and epoch count have not been tuned. Relative paths resolve from the
 working directory; run these commands from the repository root. Update dataset
 and checkpoint paths for another machine or existing training run.
+
+Use compressed Parquet for storage/transfer and a local HF Arrow dataset for
+training. Both contain full SMILES strings, without tokenization or length
+filtering. SMI conversion canonicalizes by default; use `--no_canonical` for
+already canonicalized input. Canonicalization is an offline step; the DataLoader
+only tokenizes, truncates and pads.
+
+```bash
+# Custom whitespace-delimited SMI or SMI.ZST files; SMILES is the first column.
+python scripts/smi_to_parquet.py data/*.smi.zst \
+    --output data/train-parquet --no_canonical
+
+# On the training node: decompress into a load_from_disk-compatible dataset.
+python scripts/parquet_to_arrow.py data/train-parquet \
+    --output /scratch/train-arrow --num_proc 8
+```
+
+Parquet uses Zstd level 5 by default (`--compression_level` changes it), a single
+`smiles` UTF-8 string column and 100,000-row groups. SMI conversion creates a new
+output directory containing `shard-00000.parquet`, etc., combining inputs in order.
+Small datasets produce one file; larger datasets roll over at approximately
+500 MB compressed (`--max_shard_size_mb` changes the target). A shard may exceed
+the target by a row group and file metadata. Molecules with atom-mapping
+annotations are excluded. Custom conversion does not shuffle or deduplicate.
+Arrow conversion reads the directory's Parquet files and defaults to HF shard sizing;
+`--num_shards` selects a fixed count. Set the training YAML's `train_data` to the
+resulting Arrow directory.
+
+Existing datasets containing only `token_ids` must be replaced with SMILES datasets
+before launching a new run with this code.
 
 ## Evaluation
 

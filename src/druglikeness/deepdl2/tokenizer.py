@@ -2,8 +2,10 @@
 
 import re
 from collections.abc import Iterable
+from functools import lru_cache
+from itertools import chain
 from pathlib import Path
-from typing import Union
+from typing import Any, Union
 
 from typing_extensions import Self
 
@@ -23,6 +25,23 @@ class SmilesTokenizer:
         self.pad_token_id: int = self.token_to_id["<PAD>"]
         self.bos_token_id: int = self.token_to_id["<BOS>"]
         self.eos_token_id: int = self.token_to_id["<EOS>"]
+        self._init_caches()
+
+    def _init_caches(self) -> None:
+        self._parts = lru_cache(maxsize=4096)(self._token_parts)
+        self._part_ids = lru_cache(maxsize=4096)(self._token_ids)
+
+    def __getstate__(self) -> dict[str, Any]:
+        # Recreate process-local caches when a DataLoader worker is spawned.
+        return {
+            key: value
+            for key, value in self.__dict__.items()
+            if key not in {"_parts", "_part_ids"}
+        }
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self._init_caches()
 
     def __len__(self) -> int:
         return len(self.tokens)
@@ -48,21 +67,26 @@ class SmilesTokenizer:
                 i += 1
         return parts + ["]"]
 
+    def _token_parts(self, text: str) -> tuple[str, ...]:
+        if text[0] == "[":
+            return tuple(self._split_bracket(text))
+        if text[0] == "%":
+            return tuple(text)
+        return (text,)
+
+    def _token_ids(self, text: str) -> tuple[int, ...]:
+        return tuple(self.token_to_id[token] for token in self._parts(text))
+
     def tokenize(self, smiles: str) -> list[str]:
-        result: list[str] = []
-        for match in OUTER.finditer(smiles):
-            text = match.group()
-            if text.startswith("["):
-                result.extend(self._split_bracket(text))
-            elif text.startswith("%"):
-                result.extend(text)
-            else:
-                result.append(text)
-        return result
+        return list(chain.from_iterable(map(self._parts, OUTER.findall(smiles))))
 
     def encode(self, smiles: str, *, add_special_tokens: bool = True) -> list[int]:
-        ids = [self.token_to_id[token] for token in self.tokenize(smiles)]
-        return [self.bos_token_id, *ids, self.eos_token_id] if add_special_tokens else ids
+        ids = chain.from_iterable(map(self._part_ids, OUTER.findall(smiles)))
+        return (
+            [self.bos_token_id, *ids, self.eos_token_id]
+            if add_special_tokens
+            else list(ids)
+        )
 
     def decode(self, ids: Iterable[int], *, skip_special_tokens: bool = True) -> str:
         special = {self.pad_token_id, self.bos_token_id, self.eos_token_id}

@@ -1,4 +1,4 @@
-"""Hugging Face datasets, fixed-width collation and Lightning data loaders."""
+"""HF SMILES datasets, online tokenization and fixed-width Lightning loaders."""
 
 from typing import TYPE_CHECKING, Optional
 
@@ -17,19 +17,20 @@ if TYPE_CHECKING:
 class SmilesCollator:
     def __init__(self, max_length: int = 127) -> None:
         self.max_length: int = max_length
-        self.pad_token_id: int = SmilesTokenizer().pad_token_id
+        self.tokenizer: SmilesTokenizer = SmilesTokenizer()
 
-    def __call__(self, batch: list[dict[str, list[int]]]) -> dict[str, torch.Tensor]:
+    def __call__(self, batch: list[dict[str, str]]) -> dict[str, torch.Tensor]:
         seq = torch.full(
-            (len(batch), self.max_length + 1), self.pad_token_id, dtype=torch.long
+            (len(batch), self.max_length + 1),
+            self.tokenizer.pad_token_id,
+            dtype=torch.long,
         )
         lengths = torch.empty(len(batch), dtype=torch.long)
         for i, row in enumerate(batch):
-            # Stored IDs include BOS/EOS; the model inserts BOS internally.
-            tokens = row["token_ids"][1:]
-            assert len(tokens) <= self.max_length + 1, (
-                f"Sequence exceeds max_length={self.max_length}: {len(tokens) - 1}"
-            )
+            # Keep a lexical prefix, then EOS; the model inserts BOS internally.
+            tokens = self.tokenizer.encode(row["smiles"], add_special_tokens=False)
+            tokens = tokens[: self.max_length]
+            tokens.append(self.tokenizer.eos_token_id)
             seq[i, : len(tokens)] = torch.tensor(tokens, dtype=torch.long)
             lengths[i] = len(tokens)
         return {"seq": seq, "lengths": lengths}

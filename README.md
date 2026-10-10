@@ -157,9 +157,19 @@ Small datasets produce one file; larger datasets roll over at approximately
 500 MB compressed (`--max_shard_size_mb` changes the target). A shard may exceed
 the target by a row group and file metadata. Molecules with atom-mapping
 annotations are excluded. Custom conversion does not shuffle or deduplicate.
-Arrow conversion reads the directory's Parquet files and defaults to HF shard sizing;
-`--num_shards` selects a fixed count. Set the training YAML's `train_data` to the
-resulting Arrow directory.
+Arrow conversion streams Parquet row groups directly into final HF Arrow files,
+without an intermediate Arrow cache or a second full dataset copy. It preserves
+input order and divides rows evenly between shards. The default shard count is
+estimated from Parquet's uncompressed SMILES size at approximately 500 MB per shard;
+`--num_shards` selects a fixed count. Metadata scanning and shard completion display
+progress bars. `--output` must be a new directory; an interrupted conversion can
+leave partial output, which must be removed or replaced with a new output path
+before restarting. Set the training YAML's `train_data` to the resulting Arrow
+directory, readable with `datasets.load_from_disk`.
+
+For ZINC20, allow approximately 127 GB for the downloaded Parquet plus final Arrow,
+in addition to the Python environment and other files. Any temporary Arrow caches
+left by an older conversion must be cleaned up separately.
 
 Existing datasets containing only `token_ids` must be replaced with SMILES datasets
 before launching a new run with this code.

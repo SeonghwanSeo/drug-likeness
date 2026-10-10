@@ -126,7 +126,9 @@ Defaults include the medium model, BF16 mixed precision, compile mode `default`,
 LR `3e-4`, and logging every 100 optimizer steps. The resolved training
 configuration is saved to `save_dir/config.json`.
 
-Configs are named `<size>_stage<number>_<dataset>.yaml` for small, medium and large.
+Configs are named `<size>_stage<number>_<dataset>.yaml` for small, medium, large and xlarge.
+The large preset uses hidden size 512, 8 layers and 8 attention heads (25,784,320 parameters).
+The xlarge preset uses hidden size 512, 12 layers and 8 attention heads (38,633,984 parameters).
 Stage 1 uses ZINC20 with a 127-token limit. Stage 2 initializes from stage 1 model
 weights, starts a new optimizer/schedule, and uses PubChem with a 255-token limit.
 PubChem configs are templates: prepare a SMILES HF dataset before running;

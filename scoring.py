@@ -7,10 +7,10 @@ def parse_args():
     parser = ArgumentParser(description="Calculate Drug-likeness With Model")
     parser.add_argument("smiles", type=str, help="test smiles")
     parser.add_argument(
-        "-m", "--model", type=str, default="extended", help="Model name or path"
+        "-a", "--arch", type=str, default="deepdl", help="Architecture of the model."
     )
     parser.add_argument(
-        "-a", "--arch", type=str, default="deepdl", help="Architecture of the model."
+        "-m", "--model", type=str, default="extended", help="Model name or path"
     )
     parser.add_argument(
         "--naive",
@@ -27,8 +27,13 @@ def construct_model(arch: str, model: str, device: str) -> DrugLikenessClient:
 
         return DeepDL.from_pretrained(model, device)
 
+    elif arch == "chemprior":
+        from druglikeness.chemprior import ChemPrior
+
+        return ChemPrior.from_pretrained(model, device)
+
     else:
-        raise ValueError(f"Unknown architecture {arch}. Supported is 'deepdl'.")
+        raise ValueError(f"Unknown architecture {arch}. Use 'deepdl' or 'chemprior'.")
 
 
 if __name__ == "__main__":

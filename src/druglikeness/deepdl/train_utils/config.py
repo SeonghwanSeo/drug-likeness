@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass
-from typing import Optional
+from typing import Optional, Union
 
 
 @dataclass
@@ -25,7 +25,7 @@ class DeepDLTrainConfig:
     max_epochs: int = 100
     num_gpus: int = 1
     gradient_clip_val: float = 1.0
-    precision: int | str = 32
+    precision: Union[int, str] = 32
 
     # logger
     save_dir: str = "./result"

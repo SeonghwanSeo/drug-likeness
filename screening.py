@@ -10,10 +10,10 @@ def parse_args():
         "-o", "--output", type=str, required=True, help="result file (.csv)"
     )
     parser.add_argument(
-        "-m", "--model", type=str, default="extended", help="Model name or path"
+        "-a", "--arch", type=str, default="deepdl", help="Architecture of the model."
     )
     parser.add_argument(
-        "-a", "--arch", type=str, default="deepdl", help="Architecture of the model."
+        "-m", "--model", type=str, default="extended", help="Model name or path"
     )
     parser.add_argument(
         "--naive",
@@ -33,8 +33,13 @@ def construct_model(arch: str, model: str, device: str) -> DrugLikenessClient:
 
         return DeepDL.from_pretrained(model, device)
 
+    elif arch == "chemprior":
+        from druglikeness.chemprior import ChemPrior
+
+        return ChemPrior.from_pretrained(model, device)
+
     else:
-        raise ValueError(f"Unknown architecture {arch}. Supported is 'deepdl'.")
+        raise ValueError(f"Unknown architecture {arch}. Use 'deepdl' or 'chemprior'.")
 
 
 if __name__ == "__main__":
@@ -48,7 +53,7 @@ if __name__ == "__main__":
 
     print(f"Screening {len(smiles_list)} SMILES")
     score_list = model.screening(
-        smiles_list, args.naive, batch_size=args.batch_size, verbose=True
+        smiles_list, batch_size=args.batch_size, naive=args.naive, verbose=True
     )
     assert len(smiles_list) == len(score_list), (
         "The number of SMILES and scores do not match."

@@ -1,0 +1,38 @@
+dataset:
+  path: SeonghwanSeo/chemprior-data
+  name: chembl
+  train_split: train
+  val_split: validation
+  max_length: 255
+  enumerate_stereo: false
+  num_workers: 2
+
+train:
+  model: large
+  stage: midtrain
+  pretrained_model: results/chemprior-large/pretrain/last.ckpt
+  batch_size: 512
+  global_batch_size: 16384
+  max_epochs: 100
+  lr: 0.0003
+  betas: [0.9, 0.95]
+  eps: 1.0e-8
+  weight_decay: 0.01
+  gradient_clip_val: 1.0
+  warmup_steps: 500
+  decay_steps: 0
+  min_lr_ratio: 0.1
+
+run:
+  seed: 42
+  save_dir: results/chemprior-large/midtrain/
+  resume_checkpoint: null
+  accelerator: auto
+  devices: auto
+  precision: bf16-mixed
+  compile_model: true
+  compile_mode: default
+  save_every_n_epochs: 1
+  val_every_n_epochs: 1
+  log_every_n_steps: 100
+  use_wandb: false

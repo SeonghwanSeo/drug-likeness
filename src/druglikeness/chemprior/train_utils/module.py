@@ -1,7 +1,6 @@
-"""Lightning training objective, optimizer and WSD schedule."""
+"""ChemPrior training with Lightning."""
 
 import math
-from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
 import lightning as L
@@ -9,59 +8,20 @@ import torch
 from lightning.pytorch.utilities.types import OptimizerLRSchedulerConfig
 from torch.nn import functional as F
 
-from ..model import DeepDL2, DeepDL2Config
+from ..model import ChemPrior
+from .config import ChemPriorTrainConfig
 
 
-@dataclass
-class DeepDL2TrainConfig:
-    train_data: str
-    save_dir: str
-    val_data: Optional[str] = None
-    model: DeepDL2Config = field(default_factory=DeepDL2Config)
-    stage: str = "pretrain"
-    pretrained_model: Optional[str] = None
-    resume_checkpoint: Optional[str] = None
-    batch_size: int = 512
-    max_length: int = 127
-    accumulate_grad_batches: int = 1
-    num_workers: int = 4
-    shuffle_buffer: int = 100000
-    max_epochs: int = 5
-    warmup_steps: int = 500
-    decay_steps: int = 0
-    lr: float = 3e-4
-    betas: tuple[float, float] = (0.9, 0.95)
-    eps: float = 1e-8
-    min_lr_ratio: float = 0.1
-    weight_decay: float = 0.01
-    gradient_clip_val: float = 1.0
-    precision: str = "bf16-mixed"
-    accelerator: str = "gpu"
-    devices: int = 1
-    compile_model: bool = True
-    compile_mode: str = "default"
-    seed: int = 42
-    save_every_n_steps: int = 10000
-    val_every_n_steps: int = 1000
-    log_every_n_steps: int = 100
-    use_wandb: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-class DeepDL2TrainingModule(L.LightningModule):
-    def __init__(self, config: DeepDL2TrainConfig) -> None:
+class ChemPriorTrainingModule(L.LightningModule):
+    def __init__(self, config: ChemPriorTrainConfig) -> None:
         super().__init__()
-        self.config: DeepDL2TrainConfig = config
-        source = config.resume_checkpoint or config.pretrained_model
-        self.model: DeepDL2 = (
-            DeepDL2.from_pretrained(source)
-            if source
-            else DeepDL2.from_config(config.model)
+        self.config: ChemPriorTrainConfig = config
+        source = config.run.resume_checkpoint or config.train.pretrained_model
+        self.model: ChemPrior = (
+            ChemPrior.from_pretrained(source) if source else ChemPrior(config.train.model)
         )
         self.model.train()
-        self.config.model = self.model.config
+        self.config.train.model = self.model.config
         self.save_hyperparameters(config.to_dict())
 
     def forward(
@@ -70,8 +30,14 @@ class DeepDL2TrainingModule(L.LightningModule):
         return self.model(seq, lengths)
 
     def loss(self, seq: torch.Tensor, logits: torch.Tensor) -> torch.Tensor:
+        """Calculate mean token cross-entropy, ignoring padding."""
+        model = self.model
+        mask = torch.zeros(logits.size(-1), dtype=torch.bool, device=logits.device)
+        mask[model.pad_token_id] = mask[model.bos_token_id] = True
+        logits = logits.float().masked_fill(mask, -torch.inf)
+
         return F.cross_entropy(
-            self.model.prediction_logits(logits).flatten(0, 1),
+            logits.flatten(0, 1),
             seq.flatten(),
             ignore_index=self.model.pad_token_id,
         )
@@ -80,21 +46,21 @@ class DeepDL2TrainingModule(L.LightningModule):
         c = self.config
         optimizer = torch.optim.AdamW(
             self.model.parameters(),
-            lr=self.config.lr,
-            betas=self.config.betas,
-            eps=self.config.eps,
-            weight_decay=self.config.weight_decay,
+            lr=self.config.train.lr,
+            betas=self.config.train.betas,
+            eps=self.config.train.eps,
+            weight_decay=self.config.train.weight_decay,
         )
         total_steps = self.trainer.estimated_stepping_batches
 
         def schedule(step: int) -> float:
-            if step < c.warmup_steps:
-                return (step + 1) / c.warmup_steps
-            decay_start = total_steps - c.decay_steps
-            if c.decay_steps == 0 or step < decay_start:
+            if step < c.train.warmup_steps:
+                return (step + 1) / c.train.warmup_steps
+            decay_start = total_steps - c.train.decay_steps
+            if c.train.decay_steps == 0 or step < decay_start:
                 return 1.0
-            progress = min((step - decay_start) / c.decay_steps, 1.0)
-            return c.min_lr_ratio + (1 - c.min_lr_ratio) * 0.5 * (
+            progress = min((step - decay_start) / c.train.decay_steps, 1.0)
+            return c.train.min_lr_ratio + (1 - c.train.min_lr_ratio) * 0.5 * (
                 1 + math.cos(math.pi * progress)
             )
 
@@ -107,8 +73,8 @@ class DeepDL2TrainingModule(L.LightningModule):
         }
 
     def on_fit_start(self) -> None:
-        if self.config.compile_model and self.model.config.architecture == "transformer":
-            self.model.compile(dynamic=False, mode=self.config.compile_mode)
+        if self.config.run.compile_model:
+            self.model.compile(dynamic=False, mode=self.config.run.compile_mode)
 
     def training_step(
         self, batch: dict[str, torch.Tensor], batch_idx: int
@@ -120,7 +86,7 @@ class DeepDL2TrainingModule(L.LightningModule):
 
     @torch.no_grad()
     def on_before_optimizer_step(self, optimizer: torch.optim.Optimizer) -> None:
-        if (self.global_step + 1) % self.config.log_every_n_steps != 0:
+        if (self.global_step + 1) % self.config.run.log_every_n_steps != 0:
             return
         if not self.trainer.is_global_zero:
             return
@@ -149,13 +115,24 @@ class DeepDL2TrainingModule(L.LightningModule):
 
     def validation_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> None:
         seq = batch["seq"]
-        loss = self.loss(seq, self(seq, batch["lengths"]))
+        logits = self(seq, batch["lengths"])
+        loss = self.loss(seq, logits)
         self.log(
             "val_loss",
             loss,
+            on_step=False,
             on_epoch=True,
             sync_dist=True,
-            batch_size=seq.size(0),
+            batch_size=int(batch["lengths"].sum().item()),
+            prog_bar=True,
+        )
+        nll = -self.model.calc_p_x(seq, logits)
+        self.log(
+            "val_score",
+            (100.0 - nll).clamp(min=0.0).mean() / 100.0,
+            on_step=False,
+            on_epoch=True,
+            sync_dist=True,
             prog_bar=True,
         )
 

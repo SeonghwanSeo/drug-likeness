@@ -2,218 +2,180 @@
 
 <img src="assets/score_distribution.png" width=600>
 
-This repository contains API for [Drug-likeness scoring based on unsupervised learning](https://pubs.rsc.org/en/content/articlehtml/2022/sc/d1sc05248a).
-Original code is available at [SeonghwanSeo/DeepDL](https://github.com/SeonghwanSeo/DeepDL).
+This repository provides **DeepDL**, the model from [Drug-likeness scoring based on unsupervised learning](https://pubs.rsc.org/en/content/articlehtml/2022/sc/d1sc05248a), and **ChemPrior**, a Transformer-based SMILES model.
+The original DeepDL code is available at [SeonghwanSeo/DeepDL](https://github.com/SeonghwanSeo/DeepDL).
 
-If you want to train the model with your own dataset, please see the section [#train-model](#train-model).
+For questions, open an issue or contact <shwan0106@kaist.ac.kr>.
 
-If you have any problems or need help with the code, please add an issue or contact <shwan0106@kaist.ac.kr>.
-
-### TL;DR
+## Quick Start
 
 ```bash
-# evaluate a molecule with DeepDL
->>> python scoring.py 'CC(=O)Oc1ccccc1C(=O)O'
-score: 88.856
+# Score one molecule with DeepDL.
+python scoring.py 'CC(=O)Oc1ccccc1C(=O)O'
+# score: 88.856
 
-# evaluate a molecule with naive setting using another model
->>> python scoring.py 'CC12C(O)CNC13C1CC(N1)C23' --naive -m chemsci-2021
-score: 41.399
+# Screen a SMILES file using a single stereoisomer per molecule.
+python screening.py data/examples/chembl_1k.smi -o out.csv --naive --cuda
 
-# screening
->>> python screening.py data/examples/chembl_1k.smi -o out.csv --naive --cuda
+# Use a trained ChemPrior model.
+python scoring.py 'CC(=O)Oc1ccccc1C(=O)O' \
+    --arch chemprior --model results/chemprior-small/midtrain/model.pt
 ```
 
-- `88.856` is the predicted score. The higher the score, the higher the **drug-likeness**.
-- For fast screening, consider using `naive` setting, which evaluates a single stereoisomer.
-- Multiple models are providen; see [#model-list](#model-list) for details.
+Higher scores indicate higher drug-likeness.
+By default, scoring uses the lowest score among enumerated stereoisomers.
+`--naive` evaluates only the first isomer.
+DeepDL scores range from 0 to 100; ChemPrior scores range from 0 to 1.
 
 ## Installation
 
+Python 3.9 or later is required.
+
 ```bash
-# use pip
 pip install druglikeness
 
-# from official github (python 3.9-3.13)
+# Install the current source.
 git clone https://github.com/SeonghwanSeo/drug-likeness.git
 cd drug-likeness
 pip install -e .
+
+# ChemPrior inference.
+pip install -e '.[chemprior]'
+
+# Training and dataset preparation.
+pip install -e '.[train,chemprior]'
 ```
 
+Run the following repository commands from the repository root.
+
 ## Python API
+
+### DeepDL
 
 ```python
 from druglikeness.deepdl import DeepDL
 
-# Enter the name of model (see `# Model List`) or the path of your own model.
-pretrained_model_name_or_path = "extended"
-
-# This will download the model weights if you provide the model name.
-model = DeepDL.from_pretrained(pretrained_model_name_or_path, device="cpu")
-
-# Evaluate the molecule.
-score = model.scoring(smiles="CC(=O)Oc1ccccc1C(=O)O", naive=False)
-
-# Screen the molecules.
-score_list = model.screening(smiles_list=["c1ccccc1", "CCN"], naive=True, batch_size=64)
+# A model name downloads weights automatically; local checkpoint paths also work.
+model = DeepDL.from_pretrained("extended", device="cpu")
+score = model.scoring("CC(=O)Oc1ccccc1C(=O)O")
+scores = model.screening(["c1ccccc1", "CCN"], batch_size=64, naive=True)
 ```
+
+### ChemPrior
+
+```python
+from druglikeness.chemprior import ChemPrior
+
+model = ChemPrior.from_pretrained("results/chemprior-small/midtrain/model.pt")
+score = model.scoring("CC(=O)Oc1ccccc1C(=O)O")
+scores = model.screening(["c1ccccc1", "CCN"], batch_size=64, naive=True)
+
+# Return summed log probability without clipping or rescaling.
+log_probs = model.screening(["c1ccccc1", "CCN"], normalize=False)
+```
+
+ChemPrior loads an exported `model.pt` or a ChemPrior Lightning checkpoint.
+`normalize=False` returns log probability including EOS and excluding padding; stereoisomer selection follows the same scoring rule.
 
 ## Model List
 
-| Model Name              | Description                                                                                 |
-| :---------------------- | :------------------------------------------------------------------------------------------ |
-| `extended` (default)              | **New model** trained on an updated drug database. (excluding test set: FDA-approved drugs) |
-| `chemsci-2025`          | **Retrained model** of `chemsci-2021` with hyperparameter tuning.                |
-| `chemsci-2021`          | **Finetuned model** from the paper (PubChem pretrained, World Drug finetuned).              |
-| `chemsci-2021-pretrain` | **Pretrained model** from the paper (trained on PubChem)                                    |
+### DeepDL
 
-If your environment is offline, you can manually download the models from [Google Drive](https://drive.google.com/drive/folders/1yMxR7HwmwH8wK1mA3wgEasOZ510Ib1-o?usp=share_link).
+| Model | Description |
+| --- | --- |
+| `extended` (default) | Trained on an updated drug dataset, excluding the FDA-approved test set |
+| `chemsci-2025` | Retrained paper model with hyperparameter tuning |
+| `chemsci-2021` | Paper model: PubChem pretraining followed by World Drug fine-tuning |
+| `chemsci-2021-pretrain` | PubChem pretrained model from the paper |
 
-### Model Performance
+Weights can also be downloaded from [Google Drive](https://drive.google.com/drive/folders/1yMxR7HwmwH8wK1mA3wgEasOZ510Ib1-o?usp=share_link).
 
-Following shows the scoring performance (AUROC) of the models on the various test datasets.
+### ChemPrior
 
-| Model          | Mode   | FDA vs ChEMBL | FDA vs ZINC15 | FDA vs GDB17 |
-| -------------- | ------ | ------------- | ------------- | ------------ |
-| `extended`     | strict | 0.862         | 0.961         | 0.991        |
-| `extended`     | naive  | 0.861         | 0.961         | 0.989        |
-| `chemsci-2025` | strict | 0.817         | 0.941         | 0.984        |
-| `chemsci-2025` | naive  | 0.817         | 0.941         | 0.982        |
+ChemPrior supports three Transformer presets.
+Use your trained checkpoint for inference.
+
+| Preset | Hidden size | Layers | Attention heads |
+| --- | ---: | ---: | ---: |
+| `small` | 256 | 8 | 4 |
+| `medium` | 384 | 8 | 6 |
+| `large` | 512 | 12 | 8 |
+
+### DeepDL Performance
+
+AUROC on FDA-approved drugs versus each comparison dataset:
+
+| Model | Mode | FDA vs ChEMBL | FDA vs ZINC15 | FDA vs GDB17 |
+| --- | --- | ---: | ---: | ---: |
+| `extended` | strict | 0.862 | 0.961 | 0.991 |
+| `extended` | naive | 0.861 | 0.961 | 0.989 |
+| `chemsci-2025` | strict | 0.817 | 0.941 | 0.984 |
+| `chemsci-2025` | naive | 0.817 | 0.941 | 0.982 |
 
 ## Train Model
 
-You can finetune the model with your own dataset using the pretrained model on **PubChem** dataset.
+### DeepDL Fine-tuning
+
+Fine-tune the PubChem pretrained model with your own `.smi` file:
 
 ```bash
 pip install -e '.[train]'
+python scripts/deepdl/train.py --data_path my-molecules.smi
 
-# train with the 2.8k training set from the paper
-bash ./scripts/download_data.sh
-python ./scripts/train_deepdl.py --data_path ./data/train/worlddrug_not_fda.smi
-
-python ./scripts/train_deepdl.py --data_path <smi_file>
+# Or use the training data from the paper.
+bash scripts/deepdl/download_data.sh
+python scripts/deepdl/train.py --data_path data/train/worlddrug_not_fda.smi
 ```
 
-Train DeepDL2 with a YAML config in `configs/deepdl2/`. Set `train_data` to a Hugging Face
-`save_to_disk` dataset containing a `smiles` string column and `save_dir` to the
-output directory. DataLoader workers tokenize SMILES when assembling each batch.
-The supplied configs
-use `???` for dataset and pretrained checkpoint paths for the user to fill in. By default, all
-visible GPUs are used; `devices: N` in YAML selects a GPU count. Lightning launches
-distributed training automatically.
+### ChemPrior Training
 
-For PubChem continuation, set `pretrained_model` to a ZINC Lightning `.ckpt` file
-or exported `model.pt`. Only model weights are loaded; each new stage starts with
-a fresh optimizer and LR schedule. PubChem configs use LR `1e-4` and 500 warmup
-steps. Both stages use a shuffle buffer of 100,000 molecules.
-`resume_checkpoint` takes precedence and restores the full interrupted training
-state, including the optimizer and scheduler, but not the data cursor.
+Choose a YAML template in `configs/chemprior/`:
 
 ```bash
-pip install -e '.[train,deepdl2]'
-python scripts/train_deepdl2.py configs/deepdl2/medium_stage1_zinc20.yaml
+pip install -e '.[train,chemprior]'
+python scripts/chemprior/train.py configs/chemprior/small_1_pretrain.yaml
+python scripts/chemprior/train.py configs/chemprior/small_2_midtrain.yaml
 
-# Continue with PubChem after preparing its HF dataset and completing stage 1.
-python scripts/train_deepdl2.py configs/deepdl2/medium_stage2_pubchem.yaml
-
-# Resume an interrupted stage, including optimizer and scheduler state.
-python scripts/train_deepdl2.py configs/deepdl2/medium_stage1_zinc20.yaml \
-    --resume_checkpoint result/deepdl2/medium_stage1_zinc20/checkpoints/last.ckpt
+# Resume an interrupted run.
+python scripts/chemprior/train.py configs/chemprior/small_1_pretrain.yaml \
+    --resume_checkpoint results/chemprior-small/pretrain/checkpoints/last.ckpt
 ```
 
-`batch_size` is per GPU. Gradient accumulation is computed as
-`global_batch_size // (batch_size * devices)`, following esm-open. Choose a global
-batch that is a positive integer multiple of `batch_size * devices`.
-Global batch counts molecules, not tokens; `max_length` excludes BOS/EOS.
-Both training and validation keep the first `max_length` lexical tokens, append
-EOS, and pad to `max_length + 1`. The model inserts BOS internally. Overlength
-molecules are truncated rather than dropped, and both loaders use `drop_last=True`.
-The CLI does not probe GPU memory or tune the per-GPU batch size.
-Defaults include the medium model, BF16 mixed precision, compile mode `default`,
-LR `3e-4`, and logging every 100 optimizer steps. The resolved training
-configuration is saved to `save_dir/config.json`.
+The templates stream the private [SeonghwanSeo/chemprior-data](https://huggingface.co/datasets/SeonghwanSeo/chemprior-data) repository and require Hugging Face access credentials.
+Pretraining uses the merged ZINC20 + PubChem `pretrain` subset; midtraining continues on salt-free ChEMBL37 parents in the `chembl` subset.
+ChEMBL has a 90%/5%/5% train/validation/test split, without similarity filtering.
 
-Configs are named `<size>_stage<number>_<dataset>.yaml` for small, medium, large and xlarge.
-The large preset uses hidden size 512, 8 layers and 8 attention heads (25,784,320 parameters).
-The xlarge preset uses hidden size 512, 12 layers and 8 attention heads (38,633,984 parameters).
-Stage 1 uses ZINC20 with a 127-token limit. Stage 2 initializes from stage 1 model
-weights, starts a new optimizer/schedule, and uses PubChem with a 255-token limit.
-PubChem configs are templates: prepare a SMILES HF dataset before running;
-their LR, batch size and epoch count have not been tuned. Relative paths resolve from the
-working directory; run these commands from the repository root. Update dataset
-and checkpoint paths for another machine or existing training run.
+Edit the three config groups for your run:
 
-Use compressed Parquet for storage/transfer and a local HF Arrow dataset for
-training. Both contain full SMILES strings, without tokenization or length
-filtering. SMI conversion canonicalizes by default; use `--no_canonical` for
-already canonicalized input. Canonicalization is an offline step; the DataLoader
-only tokenizes, truncates and pads.
+- `dataset`: data source, splits, token limit and stereo enumeration.
+- `train`: model size, initial weights, batch size, epochs and learning rate.
+- `run`: output directory, devices, precision and logging.
+
+`dataset.enumerate_stereo: false` tokenizes stored SMILES directly.
+Set it to `true` to sample an enumeration of unspecified stereochemistry during training, preserving assigned stereo.
+`train.batch_size` is per device; `global_batch_size` must be a positive multiple of batch size times device count.
+Training writes `config.json`, checkpoints and a final `model.pt` under `run.save_dir`.
+
+For your own dataset, convert tab-separated SMILES and IDs to Parquet:
 
 ```bash
-# Custom whitespace-delimited SMI or SMI.ZST files; SMILES is the first column.
-python scripts/smi_to_parquet.py data/*.smi.zst \
-    --output data/train-parquet --no_canonical
-
-# On the training node: decompress into a load_from_disk-compatible dataset.
-python scripts/parquet_to_arrow.py data/train-parquet \
-    --output /scratch/train-arrow --num_proc 8
+python scripts/chemprior/to_parquet.py my-molecules.smi --output data/my-parquet
 ```
 
-Parquet uses Zstd level 5 by default (`--compression_level` changes it), a single
-`smiles` UTF-8 string column and 100,000-row groups. SMI conversion creates a new
-output directory containing `shard-00000.parquet`, etc., combining inputs in order.
-Small datasets produce one file; larger datasets roll over at approximately
-500 MB compressed (`--max_shard_size_mb` changes the target). A shard may exceed
-the target by a row group and file metadata. Molecules with atom-mapping
-annotations are excluded. Custom conversion does not shuffle or deduplicate.
-Arrow conversion streams Parquet row groups directly into final HF Arrow files,
-without an intermediate Arrow cache or a second full dataset copy. It preserves
-input order and divides rows evenly between shards. The default shard count is
-estimated from Parquet's uncompressed SMILES size at approximately 500 MB per shard;
-`--num_shards` selects a fixed count. Metadata scanning and shard completion display
-progress bars. `--output` must be a new directory; an interrupted conversion can
-leave partial output, which must be removed or replaced with a new output path
-before restarting. Set the training YAML's `train_data` to the resulting Arrow
-directory, readable with `datasets.load_from_disk`.
-
-For ZINC20, allow approximately 127 GB for the downloaded Parquet plus final Arrow,
-in addition to the Python environment and other files. Any temporary Arrow caches
-left by an older conversion must be cleaned up separately.
-
-Existing datasets containing only `token_ids` must be replaced with SMILES datasets
-before launching a new run with this code.
+Set `dataset.path` to your prepared dataset and include its split row counts in HF README metadata.
+See [Custom ChemPrior datasets](docs/chemprior-data.md) for input format, metadata and config examples.
 
 ## Evaluation
 
+Evaluate DeepDL on the paper's test datasets:
+
 ```bash
-# download train/test datasets
->>> bash ./scripts/download_data.sh
-
-# evaluate the model
->>> python ./scripts/evaluate.py --cuda
-
-# Output
-Test 1489 molecules in data/test/fda.smi
-Average score: 79.40051813170444
-
-Test 1792 molecules in data/test/investigation.smi
-Average score: 68.71052120625973
-
-Test 10000 molecules in data/test/chembl.smi
-Average score: 64.11581128692627
-
-Test 10000 molecules in data/test/zinc15.smi
-Average score: 52.7382759815216
-
-Test 10000 molecules in data/test/gdb17.smi
-Average score: 39.37572152862549
-
-AUROC
-FDA vs Investigation   : 0.789
-FDA vs ChEMBL          : 0.862
-FDA vs ZINC15          : 0.961
-FDA vs GDB17           : 0.991
+bash scripts/deepdl/download_data.sh
+python scripts/deepdl/evaluate.py --cuda
 ```
+
+The script reports mean scores and FDA AUROC against Investigation, ChEMBL, ZINC15 and GDB17.
+Install `.[eval]` to use `--plot`.
 
 ## Citation
 

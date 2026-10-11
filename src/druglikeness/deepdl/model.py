@@ -76,7 +76,7 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
     @classmethod
     def from_pretrained(
         cls,
-        pretrained_model_name_or_path: str = "extended",
+        pretrained_model_name_or_path: Union[str, Path] = "extended",
         device: Union[torch.device, str] = "cpu",
         config: Optional[DeepDLConfig] = None,
     ) -> Self:
@@ -113,8 +113,9 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
     def screening(
         self,
         smiles_list: list[str],
-        naive: bool = False,
         batch_size: int = 64,
+        *,
+        naive: bool = False,
         verbose: bool = False,
     ) -> list[float]:
         self.GRU.flatten_parameters()  # for performance

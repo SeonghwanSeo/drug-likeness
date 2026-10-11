@@ -1,4 +1,4 @@
-"""Element/syntax SMILES tokenizer."""
+"""SMILES tokenization and vocabulary management."""
 
 import re
 from collections.abc import Iterable
@@ -17,6 +17,8 @@ CHIRAL_CLASSES = {"TH", "AL", "SP", "TB", "OH"}
 
 
 class SmilesTokenizer:
+    """Split SMILES into element and syntax tokens."""
+
     def __init__(self, token_path: Union[str, Path] = VOCAB_PATH) -> None:
         self.tokens: tuple[str, ...] = tuple(Path(token_path).read_text().splitlines())
         self.token_to_id: dict[str, int] = {
@@ -32,7 +34,7 @@ class SmilesTokenizer:
         self._part_ids = lru_cache(maxsize=4096)(self._token_ids)
 
     def __getstate__(self) -> dict[str, Any]:
-        # Recreate process-local caches when a DataLoader worker is spawned.
+        # Cached callables are recreated after unpickling.
         return {
             key: value
             for key, value in self.__dict__.items()
@@ -48,9 +50,11 @@ class SmilesTokenizer:
 
     @classmethod
     def from_file(cls, path: Union[str, Path]) -> Self:
+        """Load a vocabulary from a text file."""
         return cls(path)
 
     def save(self, path: Union[str, Path]) -> None:
+        """Save one vocabulary token per line."""
         Path(path).write_text("\n".join(self.tokens) + "\n")
 
     def _split_bracket(self, text: str) -> list[str]:
@@ -78,9 +82,11 @@ class SmilesTokenizer:
         return tuple(self.token_to_id[token] for token in self._parts(text))
 
     def tokenize(self, smiles: str) -> list[str]:
+        """Return the tokens of a SMILES string."""
         return list(chain.from_iterable(map(self._parts, OUTER.findall(smiles))))
 
     def encode(self, smiles: str, *, add_special_tokens: bool = True) -> list[int]:
+        """Return token IDs, optionally adding BOS and EOS."""
         ids = chain.from_iterable(map(self._part_ids, OUTER.findall(smiles)))
         return (
             [self.bos_token_id, *ids, self.eos_token_id]
@@ -89,6 +95,7 @@ class SmilesTokenizer:
         )
 
     def decode(self, ids: Iterable[int], *, skip_special_tokens: bool = True) -> str:
+        """Convert token IDs to SMILES, optionally omitting special tokens."""
         special = {self.pad_token_id, self.bos_token_id, self.eos_token_id}
         return "".join(
             self.tokens[i] for i in ids if not skip_special_tokens or i not in special

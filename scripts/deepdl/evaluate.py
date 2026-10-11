@@ -1,8 +1,9 @@
 from argparse import ArgumentParser
 from collections import OrderedDict
+from itertools import groupby
 from pathlib import Path
 
-from druglikeness.sdk.api import DrugLikenessClient
+from druglikeness.deepdl import DeepDL
 
 # Test files
 TEST_FILES = {
@@ -22,9 +23,6 @@ def parse_args():
         "-m", "--model", type=str, default="extended", help="Model name or path"
     )
     parser.add_argument(
-        "-a", "--arch", type=str, default="deepdl", help="Architecture of the model."
-    )
-    parser.add_argument(
         "--naive",
         action="store_true",
         help="If True, model only considers one steroisomer",
@@ -39,20 +37,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def construct_model(arch: str, model: str, device: str) -> DrugLikenessClient:
-    if arch == "deepdl":
-        from druglikeness.deepdl import DeepDL
-
-        return DeepDL.from_pretrained(model, device)
-    elif arch in ("doubledeepdl", "deepdl2"):
-        from druglikeness.doubledeepdl import DoubleDeepDL
-
-        return DoubleDeepDL.from_pretrained(model, device)
-
-    else:
-        raise ValueError(f"Unknown architecture {arch}. Supported is 'deepdl'.")
-
-
 def compute_auroc(
     true_scores: list[float], false_scores: list[float], high_is_better: bool = True
 ) -> float:
@@ -64,18 +48,19 @@ def compute_auroc(
     labels: list[bool] = [True] * len(true_scores) + [False] * len(false_scores)
     datas = sorted(zip(scores, labels), reverse=high_is_better)
 
-    num_datas = len(datas)
     TP: list[int] = [0]  # True positive
     FP: list[int] = [0]  # False positive
 
     # loop over score list
     num_trues: int = 0
     num_falses: int = 0
-    for i in range(num_datas):
-        if datas[i][1]:
-            num_trues += 1
-        else:
-            num_falses += 1
+    # Equal scores share one threshold; arbitrary label order must not affect AUC.
+    for _, group in groupby(datas, key=lambda item: item[0]):
+        for _, positive in group:
+            if positive:
+                num_trues += 1
+            else:
+                num_falses += 1
         TP.append(num_trues)  # TP
         FP.append(num_falses)  # FP
     assert num_trues == len(true_scores), (
@@ -91,7 +76,7 @@ def compute_auroc(
 
     # loop over score list
     AUC: float = 0
-    for i in range(0, num_datas - 1):
+    for i in range(len(FPR) - 1):
         AUC += (FPR[i + 1] - FPR[i]) * (TPR[i + 1] + TPR[i]) / 2
     return AUC
 
@@ -131,7 +116,7 @@ if __name__ == "__main__":
     args = parse_args()
 
     device = "cuda" if args.cuda else "cpu"
-    model = construct_model(args.arch, args.model, device)
+    model = DeepDL.from_pretrained(args.model, device)
 
     results: OrderedDict[str, list[float]] = OrderedDict()
 
@@ -140,7 +125,7 @@ if __name__ == "__main__":
             smiles_list = [ln.split()[0] for ln in f.readlines()]
         print(f"Test {len(smiles_list)} molecules in {name}({test_file})")
         score_list = model.screening(
-            smiles_list, args.naive, batch_size=args.batch_size, verbose=True
+            smiles_list, batch_size=args.batch_size, naive=args.naive, verbose=True
         )
         assert len(smiles_list) == len(score_list), (
             "The number of SMILES and scores do not match."

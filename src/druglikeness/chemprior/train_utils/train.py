@@ -37,7 +37,9 @@ def train_chemprior(
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     logger = (
         WandbLogger(
-            project="druglikeness", group=config.train.stage, save_dir=str(destination)
+            project=config.run.wandb_project,
+            group=config.train.stage,
+            save_dir=str(destination),
         )
         if config.run.use_wandb
         else CSVLogger(

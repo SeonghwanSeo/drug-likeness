@@ -61,6 +61,7 @@ class ChemPriorRunConfig:
     val_every_n_epochs: float = 1
     log_every_n_steps: int = 100
     use_wandb: bool = False
+    wandb_project: str = "chemprior"
 
 
 @dataclass

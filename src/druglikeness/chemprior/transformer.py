@@ -41,13 +41,13 @@ class CausalAttention(nn.Module):
         self.proj = nn.Linear(hidden_dim, hidden_dim, bias=False)
 
         base = 10000.0
-        max_length = 512
+        max_length = 2048
         inv_freq = 1.0 / base ** (
             torch.arange(0, self.head_dim, 2, dtype=torch.float32) / self.head_dim
         )
         angles = torch.outer(torch.arange(max_length, dtype=torch.float32), inv_freq)
-        self.register_buffer("cos", angles.cos())
-        self.register_buffer("sin", angles.sin())
+        self.register_buffer("cos", angles.cos(), persistent=False)
+        self.register_buffer("sin", angles.sin(), persistent=False)
 
     def rotate(self, x: torch.Tensor) -> torch.Tensor:
         """Apply rotary position embeddings to a tensor with shape [B, H, L, Dh]."""

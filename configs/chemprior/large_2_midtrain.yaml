@@ -19,8 +19,8 @@ train:
   eps: 1.0e-8
   weight_decay: 0.01
   gradient_clip_val: 1.0
-  warmup_steps: 500
-  decay_steps: 0
+  warmup_steps: 100
+  lr_scheduler: constant
   min_lr_ratio: 0.1
 
 run:

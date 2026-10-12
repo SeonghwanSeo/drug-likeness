@@ -35,19 +35,22 @@ def train_chemprior(
     destination = Path(config.run.save_dir)
     checkpoint_dir = destination / "checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    logger = (
-        WandbLogger(
-            project=config.run.wandb_project,
-            group=config.train.stage,
-            save_dir=str(destination),
-        )
-        if config.run.use_wandb
-        else CSVLogger(
+    loggers = [
+        CSVLogger(
             str(destination),
             name="metrics",
             flush_logs_every_n_steps=config.run.log_every_n_steps,
         )
-    )
+    ]
+    if config.run.use_wandb:
+        loggers.append(
+            WandbLogger(
+                project=config.run.wandb_project,
+                name=config.run.wandb_name,
+                group=config.train.stage,
+                save_dir=str(destination),
+            )
+        )
     periodic_checkpoint = ModelCheckpoint(
         dirpath=checkpoint_dir,
         filename="checkpoint-{step:09d}",
@@ -94,7 +97,7 @@ def train_chemprior(
         num_sanity_val_steps=0,
         limit_val_batches=1.0 if config.dataset.val_split else 0,
         callbacks=callbacks,
-        logger=logger,
+        logger=loggers,
     )
     if trainer.is_global_zero:
         (destination / "config.json").write_text(

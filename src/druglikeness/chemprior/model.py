@@ -15,6 +15,7 @@ from typing_extensions import Self
 
 from druglikeness.sdk.api import DrugLikenessClient, ModelConfig
 
+from .cleaning import ParentCleaner
 from .tokenizer import SmilesTokenizer
 from .transformer import TransformerStack
 
@@ -108,8 +109,12 @@ class ChemPrior(DrugLikenessClient[ChemPriorConfig]):
             verbose: Display screening progress.
         Returns:
             Scores in the same order as the input SMILES.
+            Invalid or empty SMILES receive 0.0, or -inf when normalize=False.
+        Raises:
+            ValueError: An input cannot be cleaned to one parent.
         """
         minimum = [math.inf] * len(smiles_list)
+        cleaner = ParentCleaner()
         pending: list[tuple[int, str]] = []
 
         def flush() -> None:
@@ -124,8 +129,10 @@ class ChemPrior(DrugLikenessClient[ChemPriorConfig]):
             reverse=True,
         )
         for index in tqdm(order, disable=not verbose, desc="screening"):
-            smiles = smiles_list[index]
-            mol = Chem.MolFromSmiles(smiles)
+            mol = cleaner.clean(smiles_list[index])
+            if mol is None:
+                minimum[index] = 0.0 if normalize else -math.inf
+                continue
             isomers = EnumerateStereoisomers(mol)
             strings = (
                 [Chem.MolToSmiles(next(isomers))]
@@ -211,22 +218,20 @@ class ChemPrior(DrugLikenessClient[ChemPriorConfig]):
         smiles_list: list[str],
         normalize: bool = True,
     ) -> list[float]:
-        """Score a batch without stereoisomer enumeration, preserving input order.
+        """Score prepared SMILES without cleaning or stereoisomer enumeration.
 
         normalize=True returns 0–1 scores; False returns summed log probabilities.
+        Use screening() or scoring() for unvalidated input.
         """
-        order = sorted(range(len(smiles_list)), key=lambda i: len(smiles_list[i]))
+        if not smiles_list:
+            return []
         training = self.training
         self.eval()
         try:
-            seq, lengths = self.encode([smiles_list[i] for i in order])
-            values = self._calc_scores_batch(seq, lengths, normalize=normalize).tolist()
+            seq, lengths = self.encode(smiles_list)
+            return self._calc_scores_batch(seq, lengths, normalize=normalize).tolist()
         finally:
             self.train(training)
-        scores = [0.0] * len(smiles_list)
-        for index, value in zip(order, values):
-            scores[index] = value
-        return scores
 
     def _calc_scores_batch(
         self,

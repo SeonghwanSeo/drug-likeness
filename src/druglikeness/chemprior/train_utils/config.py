@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass
-from typing import Any, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 from ..model import ChemPriorConfig
 
@@ -37,7 +37,7 @@ class ChemPriorOptimizationConfig:
     batch_size: int = 512
     max_epochs: int = 10
     warmup_steps: int = 2000
-    decay_steps: int = 0
+    lr_scheduler: Literal["constant", "linear", "cosine"] = "constant"
     lr: float = 3e-4
     betas: tuple[float, float] = (0.9, 0.95)
     eps: float = 1e-8
@@ -62,6 +62,7 @@ class ChemPriorRunConfig:
     log_every_n_steps: int = 100
     use_wandb: bool = False
     wandb_project: str = "chemprior"
+    wandb_name: Optional[str] = None
 
 
 @dataclass

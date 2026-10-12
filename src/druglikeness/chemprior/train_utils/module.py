@@ -52,17 +52,38 @@ class ChemPriorTrainingModule(L.LightningModule):
             weight_decay=self.config.train.weight_decay,
         )
         total_steps = self.trainer.estimated_stepping_batches
+        warmup_steps = c.train.warmup_steps
+        scheduler = c.train.lr_scheduler
+        if scheduler not in ("constant", "linear", "cosine"):
+            raise ValueError("lr_scheduler must be constant, linear, or cosine.")
+        if (
+            isinstance(warmup_steps, bool)
+            or not isinstance(warmup_steps, int)
+            or warmup_steps < 0
+        ):
+            raise ValueError("warmup_steps must be a non-negative integer.")
+        if not math.isfinite(total_steps) or total_steps <= 0:
+            raise ValueError("The scheduler requires a finite, positive training length.")
+        if warmup_steps > total_steps:
+            raise ValueError("Warmup must fit within total optimizer steps.")
+        if scheduler != "constant" and warmup_steps == total_steps:
+            raise ValueError("Linear and cosine schedules require steps after warmup.")
+        if not 0 <= c.train.min_lr_ratio <= 1:
+            raise ValueError("min_lr_ratio must be between 0 and 1.")
+        post_warmup_steps = total_steps - warmup_steps
 
         def schedule(step: int) -> float:
-            if step < c.train.warmup_steps:
-                return (step + 1) / c.train.warmup_steps
-            decay_start = total_steps - c.train.decay_steps
-            if c.train.decay_steps == 0 or step < decay_start:
+            if step < warmup_steps:
+                return (step + 1) / warmup_steps
+            if scheduler == "constant":
                 return 1.0
-            progress = min((step - decay_start) / c.train.decay_steps, 1.0)
-            return c.train.min_lr_ratio + (1 - c.train.min_lr_ratio) * 0.5 * (
-                1 + math.cos(math.pi * progress)
+            progress = min((step - warmup_steps) / post_warmup_steps, 1.0)
+            factor = (
+                1 - progress
+                if scheduler == "linear"
+                else 0.5 * (1 + math.cos(math.pi * progress))
             )
+            return c.train.min_lr_ratio + (1 - c.train.min_lr_ratio) * factor
 
         return {
             "optimizer": optimizer,

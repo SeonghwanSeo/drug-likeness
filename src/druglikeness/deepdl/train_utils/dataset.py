@@ -24,7 +24,7 @@ class SmilesDataset(Dataset):
     @classmethod
     def from_file(cls, smi_path: Union[str, Path], preprocess: bool = True) -> Self:
         with open(smi_path) as f:
-            smiles_list: list[str] = [ln.strip().split()[0] for ln in f.readlines()]
+            smiles_list: list[str] = [ln.split()[0] for ln in f if ln.strip()]
         # preprocess the SMILES strings
         smiles_list = cls.preprocess(smiles_list) if preprocess else smiles_list
         return cls(smiles_list, preprocess=False)

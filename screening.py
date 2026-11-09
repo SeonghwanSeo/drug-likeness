@@ -10,21 +10,41 @@ def parse_args():
         "-o", "--output", type=str, required=True, help="result file (.csv)"
     )
     parser.add_argument(
-        "-a", "--arch", type=str, default="deepdl", help="Architecture of the model."
+        "-a",
+        "--arch",
+        type=str,
+        default="deepdl",
+        choices=["deepdl", "chemprior"],
+        help="Architecture of the model.",
     )
     parser.add_argument(
-        "-m", "--model", type=str, default="extended", help="Model name or path"
+        "-m",
+        "--model",
+        type=str,
+        help="Model name or path (default: 'extended' for DeepDL, "
+        "'large-chembl' for ChemPrior)",
     )
     parser.add_argument(
-        "--naive",
-        action="store_true",
-        help="If True, model only considers one steroisomer",
+        "--mode",
+        help="DeepDL: strict | naive; ChemPrior: original | first | best | remove",
     )
     parser.add_argument(
         "--cuda", action="store_true", help="If True, use cuda acceleration"
     )
     parser.add_argument("--batch_size", type=int, help="Screening batch size", default=64)
-    return parser.parse_args()
+    args = parser.parse_args()
+    modes = (
+        ("original", "first", "best", "remove")
+        if args.arch == "chemprior"
+        else ("strict", "naive")
+    )
+    if args.mode is None:
+        args.mode = modes[0]
+    elif args.mode not in modes:
+        parser.error(f"--mode for {args.arch} must be one of: {', '.join(modes)}")
+    if args.model is None:
+        args.model = "large-chembl" if args.arch == "chemprior" else "extended"
+    return args
 
 
 def construct_model(arch: str, model: str, device: str) -> DrugLikenessClient:
@@ -49,11 +69,16 @@ if __name__ == "__main__":
     model = construct_model(args.arch, args.model, device)
 
     with open(args.test_file) as f:
-        smiles_list = [ln.split()[0] for ln in f.readlines()]
+        smiles_list = [ln.split()[0] for ln in f if ln.strip()]
 
     print(f"Screening {len(smiles_list)} SMILES")
+    stereo = (
+        {"stereo_mode": args.mode}
+        if args.arch == "chemprior"
+        else {"naive": args.mode == "naive"}
+    )
     score_list = model.screening(
-        smiles_list, batch_size=args.batch_size, naive=args.naive, verbose=True
+        smiles_list, batch_size=args.batch_size, verbose=True, **stereo
     )
     assert len(smiles_list) == len(score_list), (
         "The number of SMILES and scores do not match."

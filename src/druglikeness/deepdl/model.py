@@ -1,10 +1,11 @@
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional, Union
 
-import gdown
 import torch
 import torch.nn as nn
+from huggingface_hub import snapshot_download
 from rdkit import Chem
 from rdkit.Chem.EnumerateStereoisomers import EnumerateStereoisomers
 from torch.nn.utils.rnn import PackedSequence, pack_padded_sequence, pad_packed_sequence
@@ -17,20 +18,14 @@ from .vocab import EOS_TOKEN, EOS_TOKEN_ID, PAD_TOKEN, PAD_TOKEN_ID, VOCAB
 
 NAMES = {
     # model trained on updated drug dataset excluding fda-approved
-    "extended": "extended-20250618",
+    "extended": "SeonghwanSeo/deepdl-extended",
     # model trained on worlddrug-not-fda used in paper (2833 molecules)
-    "chemsci-2025": "chemsci-20250618",
+    "chemsci-2025": "SeonghwanSeo/deepdl-chemsci-2025",
     # model (paper; worlddrug finetuned)
-    "chemsci-2021": "chemsci-2021-pubchem_worlddrug",
+    "chemsci-2021": "SeonghwanSeo/deepdl-chemsci-2021",
     # pretrained model on pubchem dataset (paper)
-    "chemsci-2021-pretrain": "chemsci-2021-pubchem",
-}
-
-GOOGLE_DRIVE_IDS = {
-    "extended-20250618": "1Qz-XOHHwE1tBhh_0MWASRM6B6vpXAUxX",
-    "chemsci-20250618": "1ggTXcLD_AhRGYkoByKWqMG8-080BDq6_",
-    "chemsci-2021-pubchem_worlddrug": "1TMJ9ZjI1x7yey-x-qdT8Veg_sUVRgdcH",
-    "chemsci-2021-pubchem": "1GI3fO0ndF-2yN5pMNDAHFBXyBa8xXtmc",
+    "chemsci-2021-pretrain": "SeonghwanSeo/deepdl-pretrain",
+    "pretrain": "SeonghwanSeo/deepdl-pretrain",
 }
 
 
@@ -47,6 +42,7 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
         super().__init__()
         if config is None:
             config = DeepDLConfig()
+        self.config = config
         self.input_size: int = config.input_size
         self.hidden_size: int = config.hidden_size
         self.n_layers: int = config.n_layers
@@ -80,34 +76,32 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
         device: Union[torch.device, str] = "cpu",
         config: Optional[DeepDLConfig] = None,
     ) -> Self:
-        # set model params
-
-        device = torch.device(device)
-        if pretrained_model_name_or_path in NAMES:
-            model_name = NAMES[pretrained_model_name_or_path]
-            checkpoint_path = Path.home() / ".local/share/deepdl" / (model_name + ".ckpt")
-            if not checkpoint_path.exists():
-                id = GOOGLE_DRIVE_IDS[model_name]
-                checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-                gdown.download(id=id, output=str(checkpoint_path), quiet=False)
-        else:
-            checkpoint_path = Path(pretrained_model_name_or_path)
-            assert checkpoint_path.exists(), (
-                f"Model path {checkpoint_path} does not exist., "
-                f"Supported Models: {list(NAMES.keys())}"
+        """Load a model alias, Hub repository, or local save_pretrained directory."""
+        path = Path(pretrained_model_name_or_path)
+        if not path.is_dir():
+            name = str(pretrained_model_name_or_path)
+            path = Path(
+                snapshot_download(
+                    repo_id=NAMES.get(name, name),
+                    allow_patterns=["config.json", "model.pth"],
+                )
             )
-
+        if config is None:
+            config = DeepDLConfig(**json.loads((path / "config.json").read_text()))
         model = cls(config)
-        model = model.to(device)
-
-        state_dict = torch.load(
-            checkpoint_path, map_location=device.type, weights_only=False
+        model.load_state_dict(
+            torch.load(path / "model.pth", map_location="cpu", weights_only=True)
         )
-        if "state_dict" in state_dict:
-            state_dict = state_dict["state_dict"]
-        model.load_state_dict(state_dict)
-        model.eval()
-        return model
+        return model.to(device).eval()
+
+    def save_pretrained(self, path: Union[str, Path]) -> None:
+        """Save config.json and model.pth in a directory."""
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        torch.save(self.state_dict(), path / "model.pth")
+        (path / "config.json").write_text(
+            json.dumps(asdict(self.config), indent=2) + "\n"
+        )
 
     @torch.no_grad()
     def screening(
@@ -118,6 +112,8 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
         naive: bool = False,
         verbose: bool = False,
     ) -> list[float]:
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive.")
         self.GRU.flatten_parameters()  # for performance
 
         # sorting for efficient batching
@@ -132,7 +128,7 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
                 indices.append((ofs, 0))
                 continue
             mol = Chem.MolFromSmiles(smi)
-            if mol is None:
+            if mol is None or mol.GetNumAtoms() == 0:
                 indices.append((ofs, 0))
                 continue
 
@@ -186,7 +182,7 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
         # shift: [<BOS>, N, C, =, O]
         seq = seq[:, :-1]  # [B, L-1]; remove the last token (eos)
         x = self.embedding(seq)  # [B, L-1] => [B, L-1, F]
-        start_codon = self.start_codon.expand_as(x[:, :1, :])  # [B, 1, F]
+        start_codon = self.start_codon.expand(x.size(0), 1, -1)  # [B, 1, F]
         x = torch.cat([start_codon, x], 1)  # [B, L, F]
 
         packed_seq = pack_padded_sequence(
@@ -258,6 +254,8 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
         return tokenized_tensor, lengths
 
     def evaluate_batch(self, smiles_list: list[str]) -> list[float]:
+        if not smiles_list:
+            return []
         # sort SMILES by length in descending order
         indices = sorted(
             range(len(smiles_list)), key=lambda i: len(smiles_list[i]), reverse=True

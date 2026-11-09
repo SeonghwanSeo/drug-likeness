@@ -88,7 +88,22 @@ class ChemPriorTrainConfig:
 
     @property
     def accumulate_grad_batches(self) -> int:
-        return self.train.global_batch_size // (self.train.batch_size * self.run.devices)
+        batch_size = self.train.batch_size
+        devices = self.run.devices
+        global_batch_size = self.train.global_batch_size
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value <= 0
+            for value in (batch_size, devices, global_batch_size)
+        ):
+            raise ValueError(
+                "Batch sizes and resolved devices must be positive integers."
+            )
+        per_step = batch_size * devices
+        if global_batch_size % per_step:
+            raise ValueError(
+                "global_batch_size must be a positive multiple of batch_size * devices."
+            )
+        return global_batch_size // per_step
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

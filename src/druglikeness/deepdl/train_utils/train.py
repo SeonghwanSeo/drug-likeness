@@ -111,3 +111,5 @@ def train_deepdl(config: DeepDLTrainConfig):
     model = DeepDLFinetuningModule(config)
 
     trainer.fit(model, train_loader, valid_loader)
+    if trainer.is_global_zero:
+        model.model.save_pretrained(config.save_dir)

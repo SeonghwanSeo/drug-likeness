@@ -8,7 +8,7 @@ import torch
 from lightning.pytorch.utilities.types import OptimizerLRSchedulerConfig
 from torch.nn import functional as F
 
-from ..model import ChemPrior
+from ..model import ChemPrior, ChemPriorConfig
 from .config import ChemPriorTrainConfig
 
 
@@ -16,10 +16,15 @@ class ChemPriorTrainingModule(L.LightningModule):
     def __init__(self, config: ChemPriorTrainConfig) -> None:
         super().__init__()
         self.config: ChemPriorTrainConfig = config
-        source = config.run.resume_checkpoint or config.train.pretrained_model
-        self.model: ChemPrior = (
-            ChemPrior.from_pretrained(source) if source else ChemPrior(config.train.model)
-        )
+        if config.run.resume_checkpoint:
+            checkpoint = torch.load(
+                config.run.resume_checkpoint, map_location="cpu", weights_only=True
+            )
+            self.model: ChemPrior = ChemPrior(ChemPriorConfig(**checkpoint["config"]))
+        elif config.train.pretrained_model:
+            self.model = ChemPrior.from_pretrained(config.train.pretrained_model)
+        else:
+            self.model = ChemPrior(config.train.model)
         self.model.train()
         self.config.train.model = self.model.config
         self.save_hyperparameters(config.to_dict())

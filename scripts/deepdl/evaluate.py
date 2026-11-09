@@ -23,9 +23,10 @@ def parse_args():
         "-m", "--model", type=str, default="extended", help="Model name or path"
     )
     parser.add_argument(
-        "--naive",
-        action="store_true",
-        help="If True, model only considers one steroisomer",
+        "--mode",
+        choices=("strict", "naive"),
+        default="strict",
+        help="Stereoisomer scoring mode (default: strict)",
     )
     parser.add_argument(
         "--cuda", action="store_true", help="If True, use cuda acceleration"
@@ -122,10 +123,13 @@ if __name__ == "__main__":
 
     for name, test_file in TEST_FILES.items():
         with open(test_file) as f:
-            smiles_list = [ln.split()[0] for ln in f.readlines()]
+            smiles_list = [ln.split()[0] for ln in f if ln.strip()]
         print(f"Test {len(smiles_list)} molecules in {name}({test_file})")
         score_list = model.screening(
-            smiles_list, batch_size=args.batch_size, naive=args.naive, verbose=True
+            smiles_list,
+            batch_size=args.batch_size,
+            naive=args.mode == "naive",
+            verbose=True,
         )
         assert len(smiles_list) == len(score_list), (
             "The number of SMILES and scores do not match."

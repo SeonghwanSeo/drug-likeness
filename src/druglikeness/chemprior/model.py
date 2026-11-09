@@ -1,11 +1,13 @@
 """Transformer-based drug-likeness scoring."""
 
+import json
 import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional, Union
 
 import torch
+from huggingface_hub import snapshot_download
 from rdkit import Chem
 from rdkit.Chem.EnumerateStereoisomers import EnumerateStereoisomers
 from torch import nn
@@ -19,16 +21,25 @@ from .cleaning import ParentCleaner
 from .tokenizer import SmilesTokenizer
 from .transformer import TransformerStack
 
+NAMES = {
+    "small-pretrain": "SeonghwanSeo/chemprior-small-pretrain",
+    "small-chembl": "SeonghwanSeo/chemprior-small-chembl",
+    "medium-pretrain": "SeonghwanSeo/chemprior-medium-pretrain",
+    "medium-chembl": "SeonghwanSeo/chemprior-medium-chembl",
+    "large-pretrain": "SeonghwanSeo/chemprior-large-pretrain",
+    "large-chembl": "SeonghwanSeo/chemprior-large-chembl",
+}
+
 
 @dataclass
 class ChemPriorConfig(ModelConfig):
     input_size: int = field(default_factory=lambda: len(SmilesTokenizer()))
-    hidden_size: int = 384
-    n_layers: int = 8
-    n_heads: int = 6
+    hidden_size: int = 512
+    n_layers: int = 12
+    n_heads: int = 8
 
     @classmethod
-    def preset(cls, name: str = "medium", **overrides: Any) -> Self:
+    def preset(cls, name: str = "large", **overrides: Any) -> Self:
         """Return a model configuration for the specified size."""
         presets = {
             "small": dict(hidden_size=256, n_layers=8, n_heads=4),
@@ -74,19 +85,23 @@ class ChemPrior(DrugLikenessClient[ChemPriorConfig]):
         device: Union[torch.device, str] = "cpu",
         config: Optional[ChemPriorConfig] = None,
     ) -> Self:
-        """Load model weights and return a model ready for inference."""
-        checkpoint = torch.load(
-            pretrained_model_name_or_path, map_location="cpu", weights_only=True
-        )
+        """Load a model alias, Hub repository, or local save_pretrained directory."""
+        path = Path(pretrained_model_name_or_path)
+        if not path.is_dir():
+            name = str(pretrained_model_name_or_path)
+            path = Path(
+                snapshot_download(
+                    repo_id=NAMES.get(name, name),
+                    allow_patterns=["config.json", "model.pth"],
+                )
+            )
         if config is None:
-            config = ChemPriorConfig(**checkpoint["config"])
+            config = ChemPriorConfig(**json.loads((path / "config.json").read_text()))
 
         model = cls(config)
-        state = {
-            key.removeprefix("model."): value
-            for key, value in checkpoint["state_dict"].items()
-        }
-        model.load_state_dict(state)
+        model.load_state_dict(
+            torch.load(path / "model.pth", map_location="cpu", weights_only=True)
+        )
         return model.to(device).eval()
 
     @torch.no_grad()
@@ -95,32 +110,38 @@ class ChemPrior(DrugLikenessClient[ChemPriorConfig]):
         smiles_list: list[str],
         batch_size: int = 64,
         *,
-        naive: bool = False,
+        stereo_mode: str = "original",
         normalize: bool = True,
         verbose: bool = False,
     ) -> list[float]:
-        """Return the lowest score across stereoisomers for each SMILES.
+        """Score each SMILES using the selected stereochemistry mode.
 
         Args:
             smiles_list: SMILES strings to score.
             batch_size: Number of stereoisomers evaluated per batch.
-            naive: Evaluate only the first stereoisomer.
+            stereo_mode: "original" preserves unspecified stereochemistry; "first" scores
+                the first enumerated stereoisomer; "best" returns the highest score;
+                "remove" removes all stereochemistry before scoring.
             normalize: Return 0–1 scores; otherwise return summed log probabilities.
             verbose: Display screening progress.
         Returns:
             Scores in the same order as the input SMILES.
             Invalid or empty SMILES receive 0.0, or -inf when normalize=False.
         Raises:
-            ValueError: An input cannot be cleaned to one parent.
+            ValueError: Unknown mode or an input cannot be cleaned to one parent.
         """
-        minimum = [math.inf] * len(smiles_list)
+        if stereo_mode not in {"original", "first", "best", "remove"}:
+            raise ValueError(f"Unknown stereochemistry mode: {stereo_mode!r}")
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive.")
+        scores = [-math.inf] * len(smiles_list)
         cleaner = ParentCleaner()
         pending: list[tuple[int, str]] = []
 
         def flush() -> None:
             values = self.evaluate_batch([s for _, s in pending], normalize=normalize)
             for (index, _), value in zip(pending, values):
-                minimum[index] = min(minimum[index], value)
+                scores[index] = max(scores[index], value)
             pending.clear()
 
         order = sorted(
@@ -131,21 +152,26 @@ class ChemPrior(DrugLikenessClient[ChemPriorConfig]):
         for index in tqdm(order, disable=not verbose, desc="screening"):
             mol = cleaner.clean(smiles_list[index])
             if mol is None:
-                minimum[index] = 0.0 if normalize else -math.inf
+                scores[index] = 0.0 if normalize else -math.inf
                 continue
-            isomers = EnumerateStereoisomers(mol)
-            strings = (
-                [Chem.MolToSmiles(next(isomers))]
-                if naive
-                else [Chem.MolToSmiles(m) for m in isomers]
-            )
+            if stereo_mode == "remove":
+                Chem.RemoveStereochemistry(mol)
+            if stereo_mode in {"original", "remove"}:
+                strings = [Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)]
+            else:
+                isomers = EnumerateStereoisomers(mol)
+                strings = (
+                    [Chem.MolToSmiles(next(isomers))]
+                    if stereo_mode == "first"
+                    else [Chem.MolToSmiles(m) for m in isomers]
+                )
             for string in strings:
                 pending.append((index, string))
                 if len(pending) == batch_size:
                     flush()
         if pending:
             flush()
-        return minimum
+        return scores
 
     # === Internal === #
 
@@ -249,13 +275,10 @@ class ChemPrior(DrugLikenessClient[ChemPriorConfig]):
         return scores
 
     def save_pretrained(self, path: Union[str, Path]) -> None:
-        """Save model configuration and weights to a file."""
+        """Save config.json and model.pth in a directory."""
         path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(
-            {
-                "config": self.config.to_dict(),
-                "state_dict": self.state_dict(),
-            },
-            path,
+        path.mkdir(parents=True, exist_ok=True)
+        torch.save(self.state_dict(), path / "model.pth")
+        (path / "config.json").write_text(
+            json.dumps(self.config.to_dict(), indent=2) + "\n"
         )

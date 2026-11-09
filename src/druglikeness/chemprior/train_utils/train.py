@@ -1,6 +1,7 @@
 """ChemPrior training entrypoint."""
 
 import json
+import math
 from pathlib import Path
 
 import lightning as L
@@ -24,14 +25,22 @@ def train_chemprior(
         config.run.devices = (
             1 if config.run.accelerator == "cpu" else torch.cuda.device_count()
         )
+    accumulation = config.accumulate_grad_batches
+    for interval in (config.run.save_every_n_epochs, config.run.val_every_n_epochs):
+        if not math.isfinite(interval) or interval <= 0:
+            raise ValueError(
+                "Checkpoint and validation epoch intervals must be positive."
+            )
     L.seed_everything(config.run.seed, workers=True)
     torch.set_float32_matmul_precision("high")
     module = ChemPriorTrainingModule(config)
     datamodule = TrainDataModule(config)
     batches_per_epoch = datamodule.batches_per_epoch
-    steps_per_epoch = batches_per_epoch // config.accumulate_grad_batches
-    save_steps = round(steps_per_epoch * config.run.save_every_n_epochs)
-    val_steps = round(steps_per_epoch * config.run.val_every_n_epochs)
+    steps_per_epoch = batches_per_epoch // accumulation
+    if steps_per_epoch == 0:
+        raise ValueError("The training split must contain at least one global batch.")
+    save_steps = max(1, round(steps_per_epoch * config.run.save_every_n_epochs))
+    val_steps = max(1, round(steps_per_epoch * config.run.val_every_n_epochs))
     destination = Path(config.run.save_dir)
     checkpoint_dir = destination / "checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -87,11 +96,11 @@ def train_chemprior(
         limit_train_batches=batches_per_epoch,
         reload_dataloaders_every_n_epochs=1,
         precision=config.run.precision,
-        accumulate_grad_batches=config.accumulate_grad_batches,
+        accumulate_grad_batches=accumulation,
         gradient_clip_val=config.train.gradient_clip_val,
         use_distributed_sampler=False,
         check_val_every_n_epoch=None,
-        val_check_interval=val_steps * config.accumulate_grad_batches,
+        val_check_interval=val_steps * accumulation,
         log_every_n_steps=config.run.log_every_n_steps,
         enable_progress_bar=True,
         num_sanity_val_steps=0,
@@ -100,7 +109,7 @@ def train_chemprior(
         logger=loggers,
     )
     if trainer.is_global_zero:
-        (destination / "config.json").write_text(
+        (destination / "training_config.json").write_text(
             json.dumps(config.to_dict(), indent=2) + "\n"
         )
     trainer.fit(module, datamodule=datamodule, ckpt_path=config.run.resume_checkpoint)
@@ -108,5 +117,5 @@ def train_chemprior(
         trainer.validate(module, datamodule=datamodule)
     trainer.save_checkpoint(destination / "last.ckpt")
     if trainer.is_global_zero:
-        module.model.save_pretrained(destination / "model.pt")
+        module.model.save_pretrained(destination)
     return trainer, module

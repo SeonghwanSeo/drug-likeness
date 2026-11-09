@@ -22,13 +22,6 @@ class DeepDLTrainingModule(L.LightningModule):
     def construct_model(self) -> DeepDL:
         return DeepDL()
 
-    def on_save_checkpoint(self, checkpoint: dict):
-        new_state_dict = {}
-        for k, v in checkpoint["state_dict"].items():
-            assert k.startswith("model.")
-            new_state_dict[k.removeprefix("model.")] = v
-        checkpoint["state_dict"] = new_state_dict
-
     def configure_optimizers(self):
         optimizer = AdamW(
             self.model.parameters(),
@@ -101,7 +94,10 @@ class DeepDLFinetuningModule(DeepDLTrainingModule):
         lr_head = self.config.lr
 
         parameter_groups = [
-            {"params": self.model.embedding.parameters(), "lr": lr_embed},
+            {
+                "params": [self.model.start_codon, *self.model.embedding.parameters()],
+                "lr": lr_embed,
+            },
             {"params": self.model.GRU.parameters(), "lr": lr_gru},
             {"params": self.model.fc.parameters(), "lr": lr_head},
         ]

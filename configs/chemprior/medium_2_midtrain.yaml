@@ -10,7 +10,7 @@ dataset:
 train:
   model: medium
   stage: midtrain
-  pretrained_model: results/chemprior-medium/pretrain/last.ckpt
+  pretrained_model: results/chemprior-medium/pretrain/
   batch_size: 512
   global_batch_size: 16384
   max_epochs: 30

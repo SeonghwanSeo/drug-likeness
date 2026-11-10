@@ -19,6 +19,16 @@ def train_chemprior(
     config: ChemPriorTrainConfig,
 ) -> tuple[L.Trainer, ChemPriorTrainingModule]:
     """Train a model and save its checkpoints, configuration and weights."""
+    destination = Path(config.run.save_dir)
+    new_pretrain = config.train.stage == "pretrain" and not config.run.resume_checkpoint
+    if new_pretrain and any(
+        (destination / name).exists()
+        for name in ("config.json", "model.pth", "last.ckpt", "checkpoints/last.ckpt")
+    ):
+        raise FileExistsError(
+            f"Pretrain artifacts already exist in {destination}. "
+            "Choose a different run.save_dir or set run.resume_checkpoint."
+        )
     if config.run.accelerator == "auto":
         config.run.accelerator = "gpu" if torch.cuda.is_available() else "cpu"
     if config.run.devices == "auto":
@@ -41,7 +51,6 @@ def train_chemprior(
         raise ValueError("The training split must contain at least one global batch.")
     save_steps = max(1, round(steps_per_epoch * config.run.save_every_n_epochs))
     val_steps = max(1, round(steps_per_epoch * config.run.val_every_n_epochs))
-    destination = Path(config.run.save_dir)
     checkpoint_dir = destination / "checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     loggers = [
@@ -62,7 +71,7 @@ def train_chemprior(
         )
     periodic_checkpoint = ModelCheckpoint(
         dirpath=checkpoint_dir,
-        filename="checkpoint-{step:09d}",
+        filename="epoch-{epoch}-step-{step}",
         auto_insert_metric_name=False,
         every_n_train_steps=save_steps,
         save_top_k=-1,
@@ -79,7 +88,7 @@ def train_chemprior(
                 dirpath=checkpoint_dir / "best",
                 monitor="val_loss",
                 mode="min",
-                filename="step={step}-val={val_loss:.4f}",
+                filename="step-{step}-val_loss-{val_loss:.4f}",
                 auto_insert_metric_name=False,
                 save_top_k=3,
                 save_on_train_epoch_end=False,
@@ -109,13 +118,13 @@ def train_chemprior(
         logger=loggers,
     )
     if trainer.is_global_zero:
-        (destination / "training_config.json").write_text(
-            json.dumps(config.to_dict(), indent=2) + "\n"
-        )
+        mode = "x" if new_pretrain else "w"
+        with (destination / "training_config.json").open(mode) as config_file:
+            config_file.write(json.dumps(config.to_dict(), indent=2) + "\n")
     trainer.fit(module, datamodule=datamodule, ckpt_path=config.run.resume_checkpoint)
     if config.dataset.val_split:
         trainer.validate(module, datamodule=datamodule)
     trainer.save_checkpoint(destination / "last.ckpt")
     if trainer.is_global_zero:
-        module.model.save_pretrained(destination)
+        module.model.save(destination)
     return trainer, module

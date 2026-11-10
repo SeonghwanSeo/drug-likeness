@@ -22,12 +22,16 @@ from .tokenizer import SmilesTokenizer
 from .transformer import TransformerStack
 
 NAMES = {
-    "small-pretrain": "SeonghwanSeo/chemprior-small-pretrain",
-    "small-chembl": "SeonghwanSeo/chemprior-small-chembl",
-    "medium-pretrain": "SeonghwanSeo/chemprior-medium-pretrain",
-    "medium-chembl": "SeonghwanSeo/chemprior-medium-chembl",
+    # default aliases
+    "pretrain": "SeonghwanSeo/chemprior-large-pretrain",
+    "chembl": "SeonghwanSeo/chemprior-large-chembl",
+    # size-specific aliases
     "large-pretrain": "SeonghwanSeo/chemprior-large-pretrain",
     "large-chembl": "SeonghwanSeo/chemprior-large-chembl",
+    "medium-pretrain": "SeonghwanSeo/chemprior-medium-pretrain",
+    "medium-chembl": "SeonghwanSeo/chemprior-medium-chembl",
+    "small-pretrain": "SeonghwanSeo/chemprior-small-pretrain",
+    "small-chembl": "SeonghwanSeo/chemprior-small-chembl",
 }
 
 
@@ -85,7 +89,7 @@ class ChemPrior(DrugLikenessClient[ChemPriorConfig]):
         device: Union[torch.device, str] = "cpu",
         config: Optional[ChemPriorConfig] = None,
     ) -> Self:
-        """Load a model alias, Hub repository, or local save_pretrained directory."""
+        """Load a model alias, Hub repository, or local directory from `save()`."""
         path = Path(pretrained_model_name_or_path)
         if not path.is_dir():
             name = str(pretrained_model_name_or_path)
@@ -103,6 +107,16 @@ class ChemPrior(DrugLikenessClient[ChemPriorConfig]):
             torch.load(path / "model.pth", map_location="cpu", weights_only=True)
         )
         return model.to(device).eval()
+
+    def save(self, out_dir: Union[str, Path]) -> None:
+        """Save config.json and model.pth in a directory."""
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        model_path, config_path = out_dir / "model.pth", out_dir / "config.json"
+        torch.save(self.state_dict(), model_path)
+        with open(config_path, "w") as f:
+            json.dump(asdict(self.config), f, indent=2)
+            f.write("\n")
 
     @torch.no_grad()
     def screening(
@@ -273,12 +287,3 @@ class ChemPrior(DrugLikenessClient[ChemPriorConfig]):
         else:
             scores = likelihood
         return scores
-
-    def save_pretrained(self, path: Union[str, Path]) -> None:
-        """Save config.json and model.pth in a directory."""
-        path = Path(path)
-        path.mkdir(parents=True, exist_ok=True)
-        torch.save(self.state_dict(), path / "model.pth")
-        (path / "config.json").write_text(
-            json.dumps(self.config.to_dict(), indent=2) + "\n"
-        )

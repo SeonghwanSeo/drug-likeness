@@ -76,7 +76,7 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
         device: Union[torch.device, str] = "cpu",
         config: Optional[DeepDLConfig] = None,
     ) -> Self:
-        """Load a model alias, Hub repository, or local save_pretrained directory."""
+        """Load a model alias, Hub repository, or local directory from `save()`."""
         path = Path(pretrained_model_name_or_path)
         if not path.is_dir():
             name = str(pretrained_model_name_or_path)
@@ -94,14 +94,15 @@ class DeepDL(DrugLikenessClient[DeepDLConfig]):
         )
         return model.to(device).eval()
 
-    def save_pretrained(self, path: Union[str, Path]) -> None:
+    def save(self, out_dir: Union[str, Path]) -> None:
         """Save config.json and model.pth in a directory."""
-        path = Path(path)
-        path.mkdir(parents=True, exist_ok=True)
-        torch.save(self.state_dict(), path / "model.pth")
-        (path / "config.json").write_text(
-            json.dumps(asdict(self.config), indent=2) + "\n"
-        )
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        model_path, config_path = out_dir / "model.pth", out_dir / "config.json"
+        torch.save(self.state_dict(), model_path)
+        with open(config_path, "w") as f:
+            json.dump(asdict(self.config), f, indent=2)
+            f.write("\n")
 
     @torch.no_grad()
     def screening(

@@ -112,4 +112,4 @@ def train_deepdl(config: DeepDLTrainConfig):
 
     trainer.fit(model, train_loader, valid_loader)
     if trainer.is_global_zero:
-        model.model.save_pretrained(config.save_dir)
+        model.model.save(config.save_dir)

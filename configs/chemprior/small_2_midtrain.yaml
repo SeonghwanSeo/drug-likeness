@@ -13,7 +13,7 @@ train:
   pretrained_model: results/chemprior-small/pretrain/
   batch_size: 512
   global_batch_size: 16384
-  max_epochs: 30
+  max_epochs: 15
   lr: 0.0001
   betas: [0.9, 0.95]
   eps: 1.0e-8
